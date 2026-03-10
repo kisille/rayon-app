@@ -1,0 +1,328 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  UsersIcon,
+  MapIcon,
+  ExclamationTriangleIcon,
+  CheckCircleIcon,
+  ArrowRightIcon,
+  PlusIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+import { formatDatumLang, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
+
+export default function Dashboard() {
+  const [daten, setDaten] = useState(null);
+  const [laden, setLaden] = useState(true);
+  const [abwesenheitModal, setAbwesenheitModal] = useState(false);
+  const [mitarbeiter, setMitarbeiter] = useState([]);
+
+  const ladeDaten = () => {
+    api.get('/dashboard').then(({ data }) => {
+      setDaten(data);
+      setLaden(false);
+    });
+  };
+
+  useEffect(() => {
+    ladeDaten();
+    api.get('/mitarbeiter').then(({ data }) => setMitarbeiter(data));
+  }, []);
+
+  if (laden) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-400 text-lg">Laden...</div>
+      </div>
+    );
+  }
+
+  const abwesenheitenMap = {};
+  for (const a of daten?.abwesenheiten_heute || []) {
+    abwesenheitenMap[a.status] = a.count;
+  }
+
+  const anzahlAusfälle = (abwesenheitenMap.krank || 0) +
+    (abwesenheitenMap.urlaub || 0) +
+    (abwesenheitenMap.sonstige || 0);
+
+  return (
+    <div>
+      {/* Datum-Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500 mt-1">{formatDatumLang(daten?.heute)}</p>
+      </div>
+
+      {/* Stat-Karten */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard
+          icon={<UsersIcon className="w-6 h-6 text-blue-600" />}
+          bg="bg-blue-50"
+          wert={daten?.anzahl_mitarbeiter || 0}
+          label="Mitarbeiter gesamt"
+          link="/mitarbeiter"
+        />
+        <StatCard
+          icon={<MapIcon className="w-6 h-6 text-green-600" />}
+          bg="bg-green-50"
+          wert={daten?.anzahl_rayone || 0}
+          label="Aktive Rayone"
+          link="/rayone"
+        />
+        <StatCard
+          icon={<ExclamationTriangleIcon className="w-6 h-6 text-red-600" />}
+          bg="bg-red-50"
+          wert={anzahlAusfälle}
+          label="Ausfälle heute"
+          link="/vertretung"
+          highlight={anzahlAusfälle > 0}
+        />
+        <StatCard
+          icon={<CheckCircleIcon className="w-6 h-6 text-yellow-600" />}
+          bg="bg-yellow-50"
+          wert={abwesenheitenMap.anwesend || (daten?.anzahl_mitarbeiter - anzahlAusfälle) || 0}
+          label="Anwesend heute"
+          link="/tagesplan"
+        />
+      </div>
+
+      {/* Hauptbereich */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Abwesenheiten heute */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900">Abwesenheiten heute</h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setAbwesenheitModal(true)}
+                className="flex items-center gap-1 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-medium px-2 py-1 rounded-lg transition-colors"
+                title="Abwesenheit manuell eintragen"
+              >
+                <PlusIcon className="w-3.5 h-3.5" />
+                Eintragen
+              </button>
+              <Link to="/vertretung" className="text-sm text-yellow-600 hover:text-yellow-700 flex items-center gap-1">
+                Vertretung <ArrowRightIcon className="w-3 h-3" />
+              </Link>
+            </div>
+          </div>
+
+          {daten?.abwesenheiten_details?.length === 0 ? (
+            <div className="text-center py-8 text-gray-400">
+              <CheckCircleIcon className="w-12 h-12 mx-auto mb-2 text-green-300" />
+              <p>Heute sind alle Mitarbeiter anwesend!</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {daten?.abwesenheiten_details?.map((a) => (
+                <div key={a.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div>
+                    <span className="font-medium text-sm">{a.mitarbeiter_name}</span>
+                    {a.rayon_nummer && (
+                      <span className="text-gray-400 text-xs ml-2">Rayon {a.rayon_nummer}</span>
+                    )}
+                  </div>
+                  <span className={statusBadgeClass(a.status)}>
+                    {statusLabel(a.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Schnellaktionen */}
+        <div className="card">
+          <h2 className="font-semibold text-gray-900 mb-4">Schnellaktionen</h2>
+          <div className="space-y-3">
+            <QuickAction
+              href="/tagesplan"
+              icon="📋"
+              title="Tagesplan aufrufen"
+              desc="Übersicht aller 37 Rayone für heute"
+            />
+            <QuickAction
+              href="/vertretung"
+              icon="🔄"
+              title="Vertretung planen"
+              desc="Optimale Vertretungen berechnen lassen"
+            />
+            <QuickAction
+              href="/fahrzeuge"
+              icon="🚛"
+              title="Fahrzeuge verwalten"
+              desc="Status der Einsatzfahrzeuge prüfen"
+            />
+            <QuickAction
+              href="/statistik"
+              icon="📊"
+              title="Fairness-Statistik"
+              desc="Wer hat wie oft eingesprungen?"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Modal: Abwesenheit manuell eintragen */}
+      {abwesenheitModal && (
+        <AbwesenheitModal
+          mitarbeiter={mitarbeiter}
+          onClose={() => setAbwesenheitModal(false)}
+          onSaved={() => { setAbwesenheitModal(false); setLaden(true); ladeDaten(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── AbwesenheitModal ─────────────────────────────────────────────────────────
+function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
+  const [formDaten, setFormDaten] = useState({
+    mitarbeiter_id: '',
+    datum: heuteDatum(),
+    status: 'krank',
+    bemerkung: '',
+  });
+  const [speichern, setSpeichern] = useState(false);
+  const [fehler, setFehler] = useState('');
+  const [suche, setSuche] = useState('');
+
+  const gefilterteMitarbeiter = mitarbeiter.filter(m => {
+    if (!suche) return true;
+    const q = suche.toLowerCase();
+    return m.name.toLowerCase().includes(q) || m.personalnummer.includes(suche);
+  });
+
+  const handleSpeichern = async (e) => {
+    e.preventDefault();
+    if (!formDaten.mitarbeiter_id) { setFehler('Bitte Mitarbeiter auswählen.'); return; }
+    setSpeichern(true);
+    setFehler('');
+    try {
+      await api.post('/abwesenheiten', {
+        mitarbeiter_id: parseInt(formDaten.mitarbeiter_id),
+        datum: formDaten.datum,
+        status: formDaten.status,
+        bemerkung: formDaten.bemerkung || null,
+      });
+      onSaved();
+    } catch (err) {
+      setFehler('Fehler beim Speichern: ' + (err?.response?.data?.fehler || err.message));
+      setSpeichern(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Abwesenheit eintragen</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+        </div>
+        <form onSubmit={handleSpeichern} className="px-6 py-4 space-y-4">
+          {/* Mitarbeiter-Suche */}
+          <div>
+            <label className="label">Mitarbeiter *</label>
+            <input
+              type="text"
+              className="input mb-1 text-sm"
+              placeholder="Nach Name oder Nr. suchen..."
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+            />
+            <select
+              className="input text-sm"
+              required
+              value={formDaten.mitarbeiter_id}
+              onChange={(e) => setFormDaten({ ...formDaten, mitarbeiter_id: e.target.value })}
+            >
+              <option value="">– Mitarbeiter auswählen –</option>
+              {gefilterteMitarbeiter.map(m => (
+                <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Datum *</label>
+            <input
+              type="date"
+              className="input"
+              required
+              value={formDaten.datum}
+              onChange={(e) => setFormDaten({ ...formDaten, datum: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <label className="label">Status *</label>
+            <select
+              className="input"
+              value={formDaten.status}
+              onChange={(e) => setFormDaten({ ...formDaten, status: e.target.value })}
+            >
+              <option value="krank">Krank</option>
+              <option value="urlaub">Urlaub</option>
+              <option value="frei">Frei</option>
+              <option value="sonstige">Sonstige</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Bemerkung</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="Optional..."
+              value={formDaten.bemerkung}
+              onChange={(e) => setFormDaten({ ...formDaten, bemerkung: e.target.value })}
+            />
+          </div>
+
+          {fehler && <div className="text-red-600 text-sm">{fehler}</div>}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" className="btn-secondary" onClick={onClose}>Abbrechen</button>
+            <button type="submit" className="btn-primary" disabled={speichern}>
+              {speichern ? 'Speichere...' : 'Speichern'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ icon, bg, wert, label, link, highlight }) {
+  return (
+    <Link to={link} className={`card hover:shadow-md transition-shadow ${highlight ? 'ring-2 ring-red-200' : ''}`}>
+      <div className="flex items-center gap-4">
+        <div className={`w-12 h-12 ${bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
+          {icon}
+        </div>
+        <div>
+          <div className={`text-2xl font-bold ${highlight ? 'text-red-600' : 'text-gray-900'}`}>{wert}</div>
+          <div className="text-sm text-gray-500">{label}</div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function QuickAction({ href, icon, title, desc }) {
+  return (
+    <Link
+      to={href}
+      className="flex items-center gap-4 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+    >
+      <span className="text-2xl">{icon}</span>
+      <div className="flex-1 min-w-0">
+        <div className="font-medium text-sm text-gray-900 group-hover:text-yellow-700">{title}</div>
+        <div className="text-xs text-gray-500 truncate">{desc}</div>
+      </div>
+      <ArrowRightIcon className="w-4 h-4 text-gray-300 group-hover:text-yellow-500 flex-shrink-0" />
+    </Link>
+  );
+}

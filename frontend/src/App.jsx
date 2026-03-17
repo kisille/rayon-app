@@ -27,6 +27,18 @@ function App() {
     return token ? { token, benutzer: JSON.parse(benutzer) } : null;
   });
 
+  useEffect(() => {
+    const disableAutocomplete = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        e.target.setAttribute('autocomplete', 'off');
+        e.target.setAttribute('data-lpignore', 'true');
+        e.target.setAttribute('data-form-type', 'other');
+      }
+    };
+    document.addEventListener('focus', disableAutocomplete, true);
+    return () => document.removeEventListener('focus', disableAutocomplete, true);
+  }, []);
+
   const login = (token, benutzer) => {
     localStorage.setItem('token', token);
     localStorage.setItem('benutzer', JSON.stringify(benutzer));

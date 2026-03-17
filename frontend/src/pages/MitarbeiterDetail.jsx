@@ -113,29 +113,12 @@ export default function MitarbeiterDetail() {
             <Detail label="Personalnr." wert={mitarbeiter.personalnummer} />
             <Detail label="Telefon" wert={mitarbeiter.telefon || '–'} />
             <Detail label="E-Mail" wert={mitarbeiter.email || '–'} />
-            <Detail
-              label="Stamm-Rayon"
-              wert={mitarbeiter.stamm_rayon_bezeichnung || '–'}
-            />
-            {mitarbeiter.heute_rayon_bezeichnung && (
+            {mitarbeiter.stamm_rayon_bezeichnung && (
               <Detail
-                label="Heute besetzt"
-                wert={
-                  <span className={mitarbeiter.heute_rayon_id === mitarbeiter.stamm_rayon_id ? 'text-green-600 font-medium' : 'text-blue-600 font-medium'}>
-                    {mitarbeiter.heute_rayon_bezeichnung}
-                    {mitarbeiter.heute_rayon_id === mitarbeiter.stamm_rayon_id ? ' (Stammrayon)' : ''}
-                  </span>
-                }
+                label="Stamm-Rayon"
+                wert={mitarbeiter.stamm_rayon_bezeichnung}
               />
             )}
-            <Detail
-              label="Ganzmitnahme"
-              wert={ganzmitnahme
-                ? `${ganzmitnahme.rayon_bezeichnung}${ganzmitnahme.rayon_id === mitarbeiter.stamm_rayon_id ? ' (= Stamm)' : ''}`
-                : (mitarbeiter.stamm_rayon_bezeichnung
-                    ? `${mitarbeiter.stamm_rayon_bezeichnung} (Stamm)`
-                    : '–')}
-            />
             {teilmitnahmen.length > 0 && (
               <Detail
                 label={`Teilmitnahmen (${teilmitnahmen.length}/2)`}

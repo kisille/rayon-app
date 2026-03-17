@@ -448,6 +448,10 @@ function seedInitialData() {
 
 function seedMonatszuteilungen2026_03() {
   const monat = '2026-03';
+  // Nur seeden wenn für diesen Monat noch gar keine Daten existieren (verhindert Reset bei Neustart)
+  const existing = db.prepare('SELECT COUNT(*) as cnt FROM monatszuteilungen WHERE monat = ?').get(monat);
+  if (existing && existing.cnt > 0) return;
+
   // PNR → Rayon-Nummer (abgelesen aus Dienstplan-Foto März 2026, gerundet auf 10er)
   const zuteilungen = [
     ['418649', 9050],   // Lesinger Patafta Biserka

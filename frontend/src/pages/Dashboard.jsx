@@ -8,6 +8,7 @@ import {
   ArrowRightIcon,
   PlusIcon,
   PencilSquareIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { formatDatumLang, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
@@ -51,6 +52,13 @@ export default function Dashboard() {
   const öffneBearbeiten = (a) => {
     setBearbeiteDaten(a);
     setAbwesenheitModal(true);
+  };
+
+  const löscheAbwesenheit = async (a) => {
+    if (!window.confirm(`Abwesenheit von ${a.mitarbeiter_name} wirklich löschen?`)) return;
+    await api.delete(`/abwesenheiten/${a.mitarbeiter_id}/${a.datum}`);
+    setLaden(true);
+    ladeDaten();
   };
 
   const öffneNeu = () => {
@@ -145,6 +153,13 @@ export default function Dashboard() {
                       title="Bearbeiten"
                     >
                       <PencilSquareIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => löscheAbwesenheit(a)}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      title="Löschen"
+                    >
+                      <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

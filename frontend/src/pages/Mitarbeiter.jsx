@@ -284,7 +284,7 @@ export default function Mitarbeiter() {
               </div>
               <div className="col-span-2">
                 <label className="label">E-Mail</label>
-                <input type="email" className="input" value={formDaten.email} autoComplete="off"
+                <input type="text" className="input" value={formDaten.email} autoComplete="off"
                   onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
               </div>
               <div className="col-span-2">

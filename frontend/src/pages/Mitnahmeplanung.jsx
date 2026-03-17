@@ -243,6 +243,7 @@ export default function Mitnahmeplanung() {
                   placeholder="Mitarbeiter nach Name oder Nr. suchen..."
                   value={mitarbeiterSuche}
                   onChange={(e) => setMitarbeiterSuche(e.target.value)}
+                  autoComplete="off"
                 />
               </div>
             )}

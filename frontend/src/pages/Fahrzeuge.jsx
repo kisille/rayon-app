@@ -457,6 +457,7 @@ export default function Fahrzeuge() {
                   onChange={e => setFormular(f => ({ ...f, kennzeichen: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                   placeholder="z.B. PT 12345"
+                  autoComplete="off"
                 />
               </div>
 
@@ -481,6 +482,7 @@ export default function Fahrzeuge() {
                     onChange={e => setFormular(f => ({ ...f, modell: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                     placeholder="z.B. eDeliver 3"
+                    autoComplete="off"
                   />
                 </div>
               </div>

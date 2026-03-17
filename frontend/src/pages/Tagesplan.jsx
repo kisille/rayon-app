@@ -144,6 +144,7 @@ export default function Tagesplan() {
             placeholder="Nach Mitarbeiter oder Rayon suchen..."
             value={suche}
             onChange={(e) => setSuche(e.target.value)}
+            autoComplete="off"
           />
         </div>
       )}

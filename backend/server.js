@@ -367,19 +367,12 @@ app.put('/api/mitarbeiter/:id', authMiddleware, (req, res) => {
   const neueRayonId = stamm_rayon_id ? parseInt(stamm_rayon_id) : null;
 
   if (alteRayonId !== neueRayonId) {
-    // Kompetenz Level 1 aktualisieren
+    // Kompetenz Level 1 aktualisieren (alten Stamm-Level entfernen)
     if (alteRayonId) {
       db.prepare('DELETE FROM kompetenzen WHERE mitarbeiter_id = ? AND rayon_id = ? AND level = 1')
         .run(req.params.id, alteRayonId);
     }
-    // Monatszuteilung für aktuellen Monat aktualisieren
-    const currentMonat = new Date().toISOString().substring(0, 7);
-    db.prepare('DELETE FROM monatszuteilungen WHERE mitarbeiter_id = ? AND monat = ?')
-      .run(req.params.id, currentMonat);
-    if (neueRayonId) {
-      db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
-        .run(currentMonat, req.params.id, neueRayonId);
-    }
+    // KEIN automatisches Erstellen einer Monatszuteilung – Stammbezirk ≠ aktuell besetzt
   }
 
   if (neueRayonId) {

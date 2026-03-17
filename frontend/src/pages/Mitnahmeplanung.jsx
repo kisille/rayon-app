@@ -61,8 +61,12 @@ export default function Mitnahmeplanung() {
   const getMitarbeiterRayon = (m) => {
     const nummer = m.aktueller_rayon_nummer || m.stamm_rayon_nummer;
     if (!nummer) return null;
-    const ort = m.aktueller_rayon_gebiet || m.stamm_rayon_gebiet;
-    return `Rayon ${nummer}${ort ? ' – ' + ort : ''}`;
+    const nrStr = String(nummer).padStart(4, '0');
+    const gebiet = m.aktueller_rayon_gebiet || m.stamm_rayon_gebiet;
+    const bezeichnung = m.aktueller_rayon_bezeichnung || m.stamm_rayon_bezeichnung;
+    // Gebiet bevorzugen, sonst Bezeichnung (wenn sie nicht nur "Rayon XXXX" ist)
+    const ort = gebiet || (bezeichnung && bezeichnung !== `Rayon ${nrStr}` && bezeichnung !== `Rayon ${nummer}` ? bezeichnung : null);
+    return `Rayon ${nrStr}${ort ? ' – ' + ort : ''}`;
   };
 
   const handleBerechnen = async () => {

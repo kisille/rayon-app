@@ -45,9 +45,16 @@
   }
 }
 
+/* Force light color scheme for text inputs – prevents dark OS autocomplete/dropdown UI */
+input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="tel"], select, textarea {
+  color-scheme: light;
+}
+
 /* Disable browser contact picker icons and autofill highlights globally */
 input::-webkit-contacts-auto-fill-button,
-input::-webkit-credentials-auto-fill-button {
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-inner-spin-button,
+input::-webkit-list-button {
   visibility: hidden;
   display: none !important;
   pointer-events: none;

@@ -269,22 +269,30 @@ export default function Mitarbeiter() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="label">Name *</label>
-                <input className="input" required value={formDaten.name} autoComplete="new-password"
+                <input className="input" required value={formDaten.name}
+                  autoComplete="off" name="x-name" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
               </div>
               <div>
                 <label className="label">Personalnummer *</label>
-                <input className="input" required value={formDaten.personalnummer} autoComplete="new-password"
+                <input className="input" required value={formDaten.personalnummer}
+                  autoComplete="off" name="x-pnr" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
               </div>
               <div>
                 <label className="label">Telefon</label>
-                <input className="input" value={formDaten.telefon} autoComplete="new-password"
+                <input className="input" value={formDaten.telefon} type="text" inputMode="numeric"
+                  autoComplete="off" name="x-tel" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
               </div>
               <div className="col-span-2">
                 <label className="label">E-Mail</label>
-                <input type="text" className="input" value={formDaten.email} autoComplete="new-password"
+                <input type="text" className="input" value={formDaten.email}
+                  autoComplete="off" name="x-mail" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
               </div>
               <div className="col-span-2">

@@ -209,25 +209,30 @@ export default function MitarbeiterDetail() {
           <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div>
               <label className="label">Name *</label>
-              <input className="input" required value={formDaten.name} autoComplete="off"
-                name="x-name" data-lpignore="true"
+              <input className="input" required value={formDaten.name}
+                autoComplete="off" name="x-name" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
             </div>
             <div>
               <label className="label">Personalnummer *</label>
-              <input className="input" required value={formDaten.personalnummer} autoComplete="new-password"
+              <input className="input" required value={formDaten.personalnummer}
+                autoComplete="off" name="x-pnr" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
             </div>
             <div>
               <label className="label">Telefon</label>
-              <input className="input" value={formDaten.telefon} autoComplete="off"
-                name="x-telefon" data-lpignore="true"
+              <input className="input" value={formDaten.telefon} type="text" inputMode="numeric"
+                autoComplete="off" name="x-tel" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
             </div>
             <div>
               <label className="label">E-Mail</label>
-              <input type="text" className="input" value={formDaten.email} autoComplete="off"
-                name="x-email" data-lpignore="true"
+              <input type="text" className="input" value={formDaten.email}
+                autoComplete="off" name="x-mail" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
             </div>
             <div>

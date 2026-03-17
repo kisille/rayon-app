@@ -113,7 +113,7 @@ export default function DienstplanImport() {
           rows={6}
           className="w-full font-mono text-xs border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400"
           placeholder="418649;9050&#10;342962;0010&#10;401363;0040"
-          autoComplete="off"
+          autoComplete="new-password"
         />
         <div className="flex gap-3 mt-3">
           <button
@@ -168,7 +168,7 @@ export default function DienstplanImport() {
                         type="text"
                         value={e.pnr}
                         onChange={ev => handleEntryChange(i, 'pnr', ev.target.value)}
-                        autoComplete="off"
+                        autoComplete="new-password"
                         className="font-mono text-gray-700 border border-transparent hover:border-gray-300 focus:border-yellow-400 focus:outline-none rounded px-1 py-0.5 w-28 bg-transparent"
                       />
                     </td>
@@ -177,7 +177,7 @@ export default function DienstplanImport() {
                         type="number"
                         value={e.rayon_nummer}
                         onChange={ev => handleEntryChange(i, 'rayon_nummer', ev.target.value)}
-                        autoComplete="off"
+                        autoComplete="new-password"
                         className="font-mono text-yellow-800 bg-yellow-50 border border-transparent hover:border-yellow-300 focus:border-yellow-400 focus:outline-none rounded px-2 py-0.5 w-20"
                       />
                     </td>

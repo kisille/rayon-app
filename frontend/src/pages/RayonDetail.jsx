@@ -59,7 +59,7 @@ export default function RayonDetail() {
                   placeholder="Rayonname / -nummer"
                   value={formDaten.bezeichnung}
                   onChange={(e) => setFormDaten({ ...formDaten, bezeichnung: e.target.value })}
-                  autoComplete="off"
+                  autoComplete="new-password"
                 />
                 <button onClick={handleSpeichern} className="text-green-600 hover:text-green-700">
                   <CheckIcon className="w-5 h-5" />
@@ -73,7 +73,7 @@ export default function RayonDetail() {
                 placeholder="Ort/e (Gebiet)"
                 value={formDaten.gebiet}
                 onChange={(e) => setFormDaten({ ...formDaten, gebiet: e.target.value })}
-                autoComplete="off"
+                autoComplete="new-password"
               />
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-500">Priorität:</label>
@@ -301,7 +301,7 @@ function ZuweisungsModal({ rayonId, monat, onClose, onSaved }) {
               value={suche}
               onChange={e => setSuche(e.target.value)}
               autoFocus
-              autoComplete="off"
+              autoComplete="new-password"
             />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
@@ -404,7 +404,7 @@ function KompetenzHinzufuegenModal({ rayonId, level, vorhandene, onClose, onSave
           <div className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input type="text" className="input pl-9 text-sm" placeholder="Name oder Personalnummer suchen..."
-              value={suche} onChange={e => setSuche(e.target.value)} autoFocus autoComplete="off" />
+              value={suche} onChange={e => setSuche(e.target.value)} autoFocus autoComplete="new-password" />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
             {gefiltert.map(m => (

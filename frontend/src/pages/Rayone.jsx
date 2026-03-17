@@ -183,7 +183,7 @@ export default function Rayone() {
               </button>
             </div>
 
-            <form onSubmit={erstellen} className="space-y-4">
+            <form autoComplete="off" onSubmit={erstellen} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Zustellbezirk-Nummer *</label>
                 <input

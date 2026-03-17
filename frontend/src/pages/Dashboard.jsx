@@ -275,7 +275,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
           </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
-        <form onSubmit={handleSpeichern} className="px-6 py-4 space-y-4">
+        <form autoComplete="off" onSubmit={handleSpeichern} className="px-6 py-4 space-y-4">
           {/* Mitarbeiter-Suche */}
           <div>
             <label className="label">Mitarbeiter *</label>
@@ -291,7 +291,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
                   placeholder="Nach Name oder Nr. suchen..."
                   value={suche}
                   onChange={(e) => setSuche(e.target.value)}
-                  autoComplete="off"
+                  autoComplete="new-password"
                 />
                 <select
                   className="input text-sm"
@@ -354,7 +354,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
               placeholder="Optional..."
               value={formDaten.bemerkung}
               onChange={(e) => setFormDaten({ ...formDaten, bemerkung: e.target.value })}
-              autoComplete="off"
+              autoComplete="new-password"
             />
           </div>
 

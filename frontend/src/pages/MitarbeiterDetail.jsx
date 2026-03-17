@@ -206,25 +206,25 @@ export default function MitarbeiterDetail() {
       {/* Bearbeiten-Modal */}
       {bearbeiteModus && (
         <Modal title="Mitarbeiter bearbeiten" onClose={() => setBearbeiteModus(false)}>
-          <form onSubmit={handleSpeichern} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div>
               <label className="label">Name *</label>
-              <input className="input" required value={formDaten.name} autoComplete="off"
+              <input className="input" required value={formDaten.name} autoComplete="new-password"
                 onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
             </div>
             <div>
               <label className="label">Personalnummer *</label>
-              <input className="input" required value={formDaten.personalnummer} autoComplete="off"
+              <input className="input" required value={formDaten.personalnummer} autoComplete="new-password"
                 onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
             </div>
             <div>
               <label className="label">Telefon</label>
-              <input className="input" value={formDaten.telefon} autoComplete="off"
+              <input className="input" value={formDaten.telefon} autoComplete="new-password"
                 onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
             </div>
             <div>
               <label className="label">E-Mail</label>
-              <input type="text" className="input" value={formDaten.email} autoComplete="off"
+              <input type="text" className="input" value={formDaten.email} autoComplete="new-password"
                 onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
             </div>
             <div>
@@ -259,7 +259,7 @@ export default function MitarbeiterDetail() {
       {/* Kompetenz hinzufügen */}
       {zeigKompetenzForm && (
         <Modal title="Rayon-Kompetenz hinzufügen" onClose={() => setZeigKompetenzForm(false)}>
-          <form onSubmit={handleKompetenzHinzufügen} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleKompetenzHinzufügen} className="space-y-4">
             <div>
               <label className="label">Rayon *</label>
               <select className="input" required value={neueKompetenz.rayon_id}

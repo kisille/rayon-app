@@ -178,7 +178,7 @@ export default function Abwesenheiten() {
       {/* Formular-Modal */}
       {zeigFormular && (
         <Modal title={bearbeiteEintrag ? 'Abwesenheit bearbeiten' : 'Abwesenheit eintragen'} onClose={schliesseFormular}>
-          <form onSubmit={handleEintragen} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleEintragen} className="space-y-4">
             <div>
               <label className="label">Mitarbeiter *</label>
               {bearbeiteEintrag ? (
@@ -223,7 +223,7 @@ export default function Abwesenheiten() {
               <input className="input" value={formDaten.bemerkung}
                 onChange={(e) => setFormDaten({ ...formDaten, bemerkung: e.target.value })}
                 placeholder="z.B. Arzttermin, Fortbildung..."
-                autoComplete="off" />
+                autoComplete="new-password" />
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" className="btn-secondary" onClick={schliesseFormular}>

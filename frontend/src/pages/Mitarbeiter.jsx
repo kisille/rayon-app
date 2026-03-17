@@ -126,7 +126,7 @@ export default function Mitarbeiter() {
           placeholder="Name oder Personalnummer suchen..."
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
-          autoComplete="off"
+          autoComplete="new-password"
         />
       </div>
 
@@ -265,26 +265,26 @@ export default function Mitarbeiter() {
       {/* Formular-Modal */}
       {zeigFormular && (
         <Modal title="Neuen Mitarbeiter anlegen" onClose={() => setZeigFormular(false)}>
-          <form onSubmit={handleSpeichern} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="label">Name *</label>
-                <input className="input" required value={formDaten.name} autoComplete="off"
+                <input className="input" required value={formDaten.name} autoComplete="new-password"
                   onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
               </div>
               <div>
                 <label className="label">Personalnummer *</label>
-                <input className="input" required value={formDaten.personalnummer} autoComplete="off"
+                <input className="input" required value={formDaten.personalnummer} autoComplete="new-password"
                   onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
               </div>
               <div>
                 <label className="label">Telefon</label>
-                <input className="input" value={formDaten.telefon} autoComplete="off"
+                <input className="input" value={formDaten.telefon} autoComplete="new-password"
                   onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
               </div>
               <div className="col-span-2">
                 <label className="label">E-Mail</label>
-                <input type="text" className="input" value={formDaten.email} autoComplete="off"
+                <input type="text" className="input" value={formDaten.email} autoComplete="new-password"
                   onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
               </div>
               <div className="col-span-2">

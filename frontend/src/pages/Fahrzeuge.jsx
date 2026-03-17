@@ -289,7 +289,7 @@ export default function Fahrzeuge() {
           placeholder="Nach Kennzeichen suchen..."
           value={kennzeichenSuche}
           onChange={e => setKennzeichenSuche(e.target.value)}
-          autoComplete="off"
+          autoComplete="new-password"
         />
       </div>
 
@@ -447,7 +447,7 @@ export default function Fahrzeuge() {
               </button>
             </div>
 
-            <form onSubmit={speichern} className="space-y-4">
+            <form autoComplete="off" onSubmit={speichern} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Kennzeichen *</label>
                 <input
@@ -457,7 +457,7 @@ export default function Fahrzeuge() {
                   onChange={e => setFormular(f => ({ ...f, kennzeichen: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                   placeholder="z.B. PT 12345"
-                  autoComplete="off"
+                  autoComplete="new-password"
                 />
               </div>
 
@@ -482,7 +482,7 @@ export default function Fahrzeuge() {
                     onChange={e => setFormular(f => ({ ...f, modell: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                     placeholder="z.B. eDeliver 3"
-                    autoComplete="off"
+                    autoComplete="new-password"
                   />
                 </div>
               </div>

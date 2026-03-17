@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { heuteDatum, formatDatumLang } from '../utils/helpers.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 const MITNAHME_ART_LABEL = {
   vollmitnahme: 'Vollmitnahme',
@@ -354,16 +355,14 @@ function MitnahmeEintrag({ eintrag, index, manuelleModus, mitarbeiter, rayone, o
         <div className="mt-2 space-y-2">
           <div>
             <label className="text-xs text-gray-500">Mitarbeiter:</label>
-            <select
-              className="input text-sm mt-0.5"
+            <SearchableSelect
+              options={mitarbeiter.map(m => ({ id: m.id, label: m.name }))}
               value={eintrag.vertreter_id || ''}
-              onChange={e => onAnpassen(index, 'vertreter_id', e.target.value ? parseInt(e.target.value) : null)}
-            >
-              <option value="">– Kein Mitarbeiter –</option>
-              {mitarbeiter.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+              onChange={id => onAnpassen(index, 'vertreter_id', id ? parseInt(id) : null)}
+              emptyLabel="– Kein Mitarbeiter –"
+              searchPlaceholder="Name suchen..."
+              className="mt-0.5"
+            />
           </div>
           <div>
             <label className="text-xs text-gray-500">Art der Mitnahme:</label>

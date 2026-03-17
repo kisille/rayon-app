@@ -15,7 +15,6 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
-import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 const STATUS_OPTIONEN = [
   { value: 'verfügbar', label: 'Verfügbar', farbe: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
@@ -548,13 +547,16 @@ export default function Fahrzeuge() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Zugeteilter Mitarbeiter</label>
-                <SearchableSelect
-                  options={mitarbeiterListe.map(m => ({ id: m.id, label: m.name, sublabel: `Nr. ${m.personalnummer}` }))}
-                  value={formular.mitarbeiter_id}
-                  onChange={id => setFormular(f => ({ ...f, mitarbeiter_id: id }))}
-                  emptyLabel="— Kein Mitarbeiter —"
-                  searchPlaceholder="Name oder Personalnummer..."
-                />
+                <select
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm bg-white"
+                  value={formular.mitarbeiter_id || ''}
+                  onChange={e => setFormular(f => ({ ...f, mitarbeiter_id: e.target.value ? parseInt(e.target.value) : null }))}
+                >
+                  <option value="">— Kein Mitarbeiter —</option>
+                  {mitarbeiterListe.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
+                  ))}
+                </select>
               </div>
 
               <div>

@@ -798,6 +798,15 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
   db.exec('BEGIN');
   try {
     for (const eintrag of eintraege) {
+      // Generelle Regel: Pro Rayon darf nur EINE Vollzustellung existieren.
+      // Bestehende Vollzustellung für diesen Rayon entfernen bevor neue gesetzt wird.
+      if (eintrag.mitarbeiter_id && !eintrag.ist_teilbesetzung) {
+        db.prepare(`
+          UPDATE tagespläne SET mitarbeiter_id = NULL, ist_vertretung = 0, vertritt_mitarbeiter_id = NULL
+          WHERE datum = ? AND rayon_id = ? AND ist_teilbesetzung = 0 AND mitarbeiter_id != ?
+        `).run(datum, eintrag.rayon_id, eintrag.mitarbeiter_id);
+      }
+
       // Wenn ein Mitarbeiter als Vollzustellung einem Rayon zugewiesen wird:
       // Alle anderen Tagesplan-Vollzustellungen für diesen MA heute leeren
       if (eintrag.mitarbeiter_id && !eintrag.ist_teilbesetzung) {

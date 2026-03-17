@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { formatDatumLang, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 export default function Dashboard() {
   const [daten, setDaten] = useState(null);
@@ -225,13 +226,6 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
   });
   const [speichern, setSpeichern] = useState(false);
   const [fehler, setFehler] = useState('');
-  const [suche, setSuche] = useState('');
-
-  const gefilterteMitarbeiter = mitarbeiter.filter(m => {
-    if (!suche) return true;
-    const q = suche.toLowerCase();
-    return m.name.toLowerCase().includes(q) || m.personalnummer.includes(suche);
-  });
 
   const handleSpeichern = async (e) => {
     e.preventDefault();
@@ -284,27 +278,13 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
                 {bearbeiteDaten.mitarbeiter_name}
               </div>
             ) : (
-              <>
-                <input
-                  type="text"
-                  className="input mb-1 text-sm"
-                  placeholder="Nach Name oder Nr. suchen..."
-                  value={suche}
-                  onChange={(e) => setSuche(e.target.value)}
-                  autoComplete="new-password"
-                />
-                <select
-                  className="input text-sm"
-                  required
-                  value={formDaten.mitarbeiter_id}
-                  onChange={(e) => setFormDaten({ ...formDaten, mitarbeiter_id: e.target.value })}
-                >
-                  <option value="">– Mitarbeiter auswählen –</option>
-                  {gefilterteMitarbeiter.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
-                  ))}
-                </select>
-              </>
+              <SearchableSelect
+                options={mitarbeiter.map(m => ({ id: String(m.id), label: m.name, sublabel: `Nr. ${m.personalnummer}` }))}
+                value={formDaten.mitarbeiter_id}
+                onChange={id => setFormDaten({ ...formDaten, mitarbeiter_id: id })}
+                emptyLabel="– Mitarbeiter auswählen –"
+                searchPlaceholder="Name oder Personalnummer..."
+              />
             )}
           </div>
 

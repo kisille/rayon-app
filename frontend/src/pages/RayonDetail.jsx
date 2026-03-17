@@ -163,6 +163,19 @@ export default function RayonDetail() {
                   <button
                     onClick={async () => {
                       await api.delete(`/monatszuteilungen/${monat}/${b.mitarbeiter_id}/${parseInt(id)}`);
+                      // Auch heutigen Tagesplan-Eintrag für diesen Rayon leeren,
+                      // damit der Mitarbeiter nicht weiter als "heute" angezeigt wird
+                      const heute = new Date().toISOString().split('T')[0];
+                      await api.post(`/tagesplan/${heute}/speichern`, {
+                        eintraege: [{
+                          rayon_id: parseInt(id),
+                          mitarbeiter_id: null,
+                          ist_vertretung: false,
+                          ist_teilbesetzung: false,
+                          vertritt_mitarbeiter_id: null,
+                          teilmitnahmen: [],
+                        }],
+                      });
                       await laden_();
                     }}
                     className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"

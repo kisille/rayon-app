@@ -209,22 +209,22 @@ export default function MitarbeiterDetail() {
           <form onSubmit={handleSpeichern} className="space-y-4">
             <div>
               <label className="label">Name *</label>
-              <input className="input" required value={formDaten.name}
+              <input className="input" required value={formDaten.name} autoComplete="off"
                 onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
             </div>
             <div>
               <label className="label">Personalnummer *</label>
-              <input className="input" required value={formDaten.personalnummer}
+              <input className="input" required value={formDaten.personalnummer} autoComplete="off"
                 onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
             </div>
             <div>
               <label className="label">Telefon</label>
-              <input className="input" value={formDaten.telefon}
+              <input className="input" value={formDaten.telefon} autoComplete="off"
                 onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
             </div>
             <div>
               <label className="label">E-Mail</label>
-              <input type="email" className="input" value={formDaten.email}
+              <input type="email" className="input" value={formDaten.email} autoComplete="off"
                 onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
             </div>
             <div>

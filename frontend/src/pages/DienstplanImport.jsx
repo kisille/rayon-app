@@ -1,57 +1,6 @@
 import React, { useState } from 'react';
 import api from '../utils/api';
 
-// Vorgeladene Daten aus Dienstplan März 2026 (abgelesen aus Foto, gerundet auf 10er)
-const MAERZ_2026 = `# Dienstplan März 2026 – Rayon-Zuteilungen
-# Format: PNR;Rayon  (Kommentare mit # werden ignoriert)
-418649;9050
-342962;0010
-401363;0040
-86189;0130
-339785;0130
-378701;0150
-106981;0150
-425017;0090
-417902;0140
-418207;0160
-416590;9190
-377128;9150
-423521;0100
-369399;0040
-400569;0160
-422591;9020
-90023882;9030
-90022756;9060
-333721;9060
-338170;9070
-230596;9080
-359852;9100
-26402;9110
-354319;9160
-422015;9180
-422042;9180
-419119;9260
-413946;0060
-424211;9200
-355431;9210
-19364;9220
-345439;9230
-334291;9120
-415106;9240
-418217;9140
-425480;0170
-425885;0020
-90033401;9130
-90020590;6030
-381792;6080
-417921;6010
-422486;6060
-422904;6010
-424137;6050
-359973;6220
-407009;6210
-421468;6210`;
-
 function parseCSV(text) {
   const entries = [];
   const parseErrors = [];
@@ -73,17 +22,31 @@ function parseCSV(text) {
 }
 
 export default function DienstplanImport() {
-  const [monat, setMonat] = useState('2026-03');
-  const [csvText, setCsvText] = useState(MAERZ_2026);
+  const monat = new Date().toISOString().substring(0, 7);
+  const [csvText, setCsvText] = useState('');
   const [preview, setPreview] = useState(null);
+  const [editableEntries, setEditableEntries] = useState([]);
+  const [parseErrors, setParseErrors] = useState([]);
   const [ersetzen, setErsetzen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
 
   const handlePreview = () => {
-    const { entries, parseErrors } = parseCSV(csvText);
-    setPreview({ entries, parseErrors });
+    const { entries, parseErrors: errors } = parseCSV(csvText);
+    setPreview(true);
+    setEditableEntries(entries.map(e => ({ ...e })));
+    setParseErrors(errors);
     setResult(null);
+  };
+
+  const handleEntryChange = (i, field, value) => {
+    setEditableEntries(prev => prev.map((e, idx) =>
+      idx === i ? { ...e, [field]: field === 'rayon_nummer' ? (parseInt(value) || 0) : value } : e
+    ));
+  };
+
+  const handleEntryRemove = (i) => {
+    setEditableEntries(prev => prev.filter((_, idx) => idx !== i));
   };
 
   const handleImport = async () => {
@@ -93,7 +56,7 @@ export default function DienstplanImport() {
     try {
       const resp = await api.post('/dienstplan/import', {
         monat,
-        eintraege: preview.entries,
+        eintraege: editableEntries,
         ersetzen,
       });
       setResult({ success: true, ...resp.data });
@@ -102,6 +65,8 @@ export default function DienstplanImport() {
     }
     setLoading(false);
   };
+
+  const monatLabel = new Date().toLocaleDateString('de-AT', { month: 'long', year: 'numeric' });
 
   return (
     <div className="max-w-4xl">
@@ -118,12 +83,9 @@ export default function DienstplanImport() {
         <div className="flex flex-wrap gap-6 items-center">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Monat</label>
-            <input
-              type="month"
-              value={monat}
-              onChange={e => setMonat(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            />
+            <span className="inline-block bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium">
+              {monatLabel}
+            </span>
           </div>
           <div className="flex items-center gap-2 pt-5">
             <input
@@ -142,74 +104,91 @@ export default function DienstplanImport() {
 
       {/* CSV-Editor */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-5">
-        <div className="flex justify-between items-center mb-3">
-          <label className="text-sm font-medium text-gray-700">
-            Zuteilungen (PNR;Rayon je Zeile)
-          </label>
-          <button
-            onClick={() => setCsvText(MAERZ_2026)}
-            className="text-xs text-yellow-600 hover:text-yellow-800 underline"
-          >
-            März 2026 laden
-          </button>
-        </div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Zuteilungen (PNR;Rayon je Zeile)
+        </label>
         <textarea
           value={csvText}
           onChange={e => setCsvText(e.target.value)}
-          rows={16}
+          rows={6}
           className="w-full font-mono text-xs border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-          placeholder="# PNR;Rayon&#10;418649;9050&#10;342962;0010"
+          placeholder="418649;9050&#10;342962;0010&#10;401363;0040"
+          autoComplete="off"
         />
         <div className="flex gap-3 mt-3">
           <button
             onClick={handlePreview}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+            disabled={!csvText.trim()}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-lg text-sm font-medium transition-colors"
           >
             Vorschau prüfen
           </button>
         </div>
       </div>
 
-      {/* Vorschau */}
+      {/* Vorschau – editierbar */}
       {preview && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-5">
           <div className="flex justify-between items-center mb-3">
             <h2 className="text-sm font-semibold text-gray-800">
-              Vorschau – {preview.entries.length} Einträge
+              Vorschau – {editableEntries.length} Einträge
+              <span className="ml-2 text-xs font-normal text-gray-400">(bearbeitbar vor Import)</span>
             </h2>
             <button
               onClick={handleImport}
-              disabled={loading || preview.entries.length === 0}
+              disabled={loading || editableEntries.length === 0}
               className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors"
             >
-              {loading ? 'Importiere…' : `${preview.entries.length} Einträge importieren`}
+              {loading ? 'Importiere…' : `${editableEntries.length} Einträge importieren`}
             </button>
           </div>
 
-          {preview.parseErrors.length > 0 && (
+          {parseErrors.length > 0 && (
             <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
-              {preview.parseErrors.map((e, i) => <div key={i}>{e}</div>)}
+              {parseErrors.map((e, i) => <div key={i}>{e}</div>)}
             </div>
           )}
 
-          <div className="overflow-x-auto max-h-72 overflow-y-auto">
+          <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="bg-gray-50 sticky top-0">
                 <tr>
                   <th className="text-left px-3 py-2 font-medium text-gray-600">#</th>
                   <th className="text-left px-3 py-2 font-medium text-gray-600">PNR</th>
                   <th className="text-left px-3 py-2 font-medium text-gray-600">Rayon</th>
+                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {preview.entries.map((e, i) => (
+                {editableEntries.map((e, i) => (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-3 py-1.5 text-gray-400">{i + 1}</td>
-                    <td className="px-3 py-1.5 font-mono text-gray-700">{e.pnr}</td>
                     <td className="px-3 py-1.5">
-                      <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-mono">
-                        {String(e.rayon_nummer).padStart(4, '0')}
-                      </span>
+                      <input
+                        type="text"
+                        value={e.pnr}
+                        onChange={ev => handleEntryChange(i, 'pnr', ev.target.value)}
+                        autoComplete="off"
+                        className="font-mono text-gray-700 border border-transparent hover:border-gray-300 focus:border-yellow-400 focus:outline-none rounded px-1 py-0.5 w-28 bg-transparent"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="number"
+                        value={e.rayon_nummer}
+                        onChange={ev => handleEntryChange(i, 'rayon_nummer', ev.target.value)}
+                        autoComplete="off"
+                        className="font-mono text-yellow-800 bg-yellow-50 border border-transparent hover:border-yellow-300 focus:border-yellow-400 focus:outline-none rounded px-2 py-0.5 w-20"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button
+                        onClick={() => handleEntryRemove(i)}
+                        className="text-gray-300 hover:text-red-500 transition-colors text-base leading-none"
+                        title="Eintrag entfernen"
+                      >
+                        ×
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -225,7 +204,7 @@ export default function DienstplanImport() {
           {result.success ? (
             <>
               <div className="text-green-800 font-semibold">
-                {result.importiert} Zuteilungen erfolgreich importiert für {monat}
+                {result.importiert} Zuteilungen erfolgreich importiert für {monatLabel}
               </div>
               {result.fehler?.length > 0 && (
                 <div className="mt-2 text-sm text-orange-700">

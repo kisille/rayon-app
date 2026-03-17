@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   TruckIcon,
   PlusIcon,
@@ -97,6 +97,7 @@ const LEERES_FORMULAR = {
 
 export default function Fahrzeuge() {
   const location = useLocation();
+  const navigate = useNavigate();
   const editIdFromState = location.state?.editId;
   const editInitialized = useRef(false);
 
@@ -288,6 +289,7 @@ export default function Fahrzeuge() {
           placeholder="Nach Kennzeichen suchen..."
           value={kennzeichenSuche}
           onChange={e => setKennzeichenSuche(e.target.value)}
+          autoComplete="off"
         />
       </div>
 
@@ -365,9 +367,12 @@ export default function Fahrzeuge() {
                 <div className="flex items-center gap-2 mb-3">
                   {antriebBadge(f.antrieb)}
                   {f.mitarbeiter_name && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    <button
+                      onClick={() => navigate(`/mitarbeiter/${f.mitarbeiter_id}`)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                    >
                       {f.mitarbeiter_name}
-                    </span>
+                    </button>
                   )}
                 </div>
 

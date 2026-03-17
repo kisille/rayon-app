@@ -61,6 +61,7 @@ export function SearchableSelect({
                 value={suche}
                 onChange={e => setSuche(e.target.value)}
                 autoFocus
+                autoComplete="off"
                 onClick={e => e.stopPropagation()}
               />
             </div>

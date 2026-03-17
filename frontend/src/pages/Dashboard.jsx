@@ -141,7 +141,7 @@ export default function Dashboard() {
               href="/tagesplan"
               icon="📋"
               title="Tagesplan aufrufen"
-              desc="Übersicht aller 37 Rayone für heute"
+              desc={`Übersicht aller ${daten?.anzahl_rayone || 0} Rayone für heute`}
             />
             <QuickAction
               href="/vertretung"
@@ -231,6 +231,7 @@ function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
               placeholder="Nach Name oder Nr. suchen..."
               value={suche}
               onChange={(e) => setSuche(e.target.value)}
+              autoComplete="off"
             />
             <select
               className="input text-sm"

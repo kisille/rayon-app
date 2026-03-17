@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { formatDatum, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
 import { Modal } from './Mitarbeiter.jsx';
@@ -11,6 +11,7 @@ export default function Abwesenheiten() {
   const [bis, setBis] = useState(heuteDatum());
   const [laden, setLaden] = useState(true);
   const [zeigFormular, setZeigFormular] = useState(false);
+  const [bearbeiteEintrag, setBearbeiteEintrag] = useState(null); // { mitarbeiter_id, datum, status, bemerkung }
   const [formDaten, setFormDaten] = useState({
     mitarbeiter_id: '',
     von: heuteDatum(),
@@ -48,14 +49,31 @@ export default function Abwesenheiten() {
       bemerkung: formDaten.bemerkung,
     });
 
-    setZeigFormular(false);
-    setFormDaten({ mitarbeiter_id: '', von: heuteDatum(), bis: heuteDatum(), status: 'krank', bemerkung: '' });
+    schliesseFormular();
     await laden_();
   };
 
   const handleLöschen = async (mitarbeiterId, datum) => {
     await api.delete(`/abwesenheiten/${mitarbeiterId}/${datum}`);
     await laden_();
+  };
+
+  const öffneBearbeiten = (a) => {
+    setBearbeiteEintrag(a);
+    setFormDaten({
+      mitarbeiter_id: String(a.mitarbeiter_id),
+      von: a.datum,
+      bis: a.datum,
+      status: a.status,
+      bemerkung: a.bemerkung || '',
+    });
+    setZeigFormular(true);
+  };
+
+  const schliesseFormular = () => {
+    setZeigFormular(false);
+    setBearbeiteEintrag(null);
+    setFormDaten({ mitarbeiter_id: '', von: heuteDatum(), bis: heuteDatum(), status: 'krank', bemerkung: '' });
   };
 
   // Abwesenheiten nach Datum gruppieren
@@ -75,7 +93,7 @@ export default function Abwesenheiten() {
           <h1 className="text-2xl font-bold text-gray-900">Abwesenheiten</h1>
           <p className="text-gray-500 mt-1">Urlaub, Krankheit und weitere Abwesenheiten</p>
         </div>
-        <button onClick={() => setZeigFormular(true)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => { setBearbeiteEintrag(null); setZeigFormular(true); }} className="btn-primary flex items-center gap-2">
           <PlusIcon className="w-4 h-4" />
           Eintragen
         </button>
@@ -133,12 +151,22 @@ export default function Abwesenheiten() {
                         <span className="text-gray-400 text-xs">({a.bemerkung})</span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleLöschen(a.mitarbeiter_id, a.datum)}
-                      className="text-gray-300 hover:text-red-500 transition-colors"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => öffneBearbeiten(a)}
+                        className="text-gray-300 hover:text-yellow-500 transition-colors"
+                        title="Bearbeiten"
+                      >
+                        <PencilSquareIcon className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleLöschen(a.mitarbeiter_id, a.datum)}
+                        className="text-gray-300 hover:text-red-500 transition-colors"
+                        title="Löschen"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -149,17 +177,23 @@ export default function Abwesenheiten() {
 
       {/* Formular-Modal */}
       {zeigFormular && (
-        <Modal title="Abwesenheit eintragen" onClose={() => setZeigFormular(false)}>
+        <Modal title={bearbeiteEintrag ? 'Abwesenheit bearbeiten' : 'Abwesenheit eintragen'} onClose={schliesseFormular}>
           <form onSubmit={handleEintragen} className="space-y-4">
             <div>
               <label className="label">Mitarbeiter *</label>
-              <select className="input" required value={formDaten.mitarbeiter_id}
-                onChange={(e) => setFormDaten({ ...formDaten, mitarbeiter_id: e.target.value })}>
-                <option value="">– Mitarbeiter auswählen –</option>
-                {mitarbeiter.map(m => (
-                  <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
-                ))}
-              </select>
+              {bearbeiteEintrag ? (
+                <div className="input bg-gray-50 text-gray-600 text-sm">
+                  {mitarbeiter.find(m => m.id === bearbeiteEintrag.mitarbeiter_id)?.name || bearbeiteEintrag.mitarbeiter_name}
+                </div>
+              ) : (
+                <select className="input" required value={formDaten.mitarbeiter_id}
+                  onChange={(e) => setFormDaten({ ...formDaten, mitarbeiter_id: e.target.value })}>
+                  <option value="">– Mitarbeiter auswählen –</option>
+                  {mitarbeiter.map(m => (
+                    <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -188,10 +222,11 @@ export default function Abwesenheiten() {
               <label className="label">Bemerkung (optional)</label>
               <input className="input" value={formDaten.bemerkung}
                 onChange={(e) => setFormDaten({ ...formDaten, bemerkung: e.target.value })}
-                placeholder="z.B. Arzttermin, Fortbildung..." />
+                placeholder="z.B. Arzttermin, Fortbildung..."
+                autoComplete="off" />
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button type="button" className="btn-secondary" onClick={() => setZeigFormular(false)}>
+              <button type="button" className="btn-secondary" onClick={schliesseFormular}>
                 Abbrechen
               </button>
               <button type="submit" className="btn-primary">Speichern</button>

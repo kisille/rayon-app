@@ -126,6 +126,7 @@ export default function Mitarbeiter() {
           placeholder="Name oder Personalnummer suchen..."
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
+          autoComplete="off"
         />
       </div>
 

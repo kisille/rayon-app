@@ -297,28 +297,17 @@ export default function Mitnahmeplanung() {
             )}
           </div>
 
-          {/* Legende */}
+          {/* Kompetenz-Hinweis */}
           {berechnet && (
-            <div className="mt-4 card p-4">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Legende</h3>
-              <div className="space-y-1 text-xs text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span className="w-16 text-center px-1 py-0.5 rounded bg-green-100 text-green-800 font-medium">Vollmitnahme</span>
-                  Rayon komplett übernommen → eigener Rayon unbesetzt
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-16 text-center px-1 py-0.5 rounded bg-yellow-100 text-yellow-800 font-medium">Teilmitnahme</span>
-                  Kleiner Teil zusätzlich → eigener Rayon bleibt besetzt
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-green-100 text-green-800 rounded text-center font-bold text-xs leading-4">2</span>
-                  Sehr gut – kennt Rayon gut (Level 2)
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-orange-100 text-orange-800 rounded text-center font-bold text-xs leading-4">3</span>
-                  Geht so – Level 3
-                </div>
-              </div>
+            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-green-100 text-green-800 rounded text-center font-bold leading-4">2</span>
+                kennt Rayon gut
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-orange-100 text-orange-800 rounded text-center font-bold leading-4">3</span>
+                kennt Rayon mäßig
+              </span>
             </div>
           )}
         </div>

@@ -38,12 +38,9 @@ export default function Statistik() {
           <p className="text-gray-500 mt-1">Mitnahmeeinsätze pro Mitarbeiter</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="month"
-            className="input w-auto"
-            value={monat}
-            onChange={(e) => setMonat(e.target.value)}
-          />
+          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+            {new Date().toLocaleDateString('de-AT', { month: 'long', year: 'numeric' })}
+          </span>
           <select
             className="input w-auto"
             value={sortierung}

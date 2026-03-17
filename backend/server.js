@@ -97,13 +97,6 @@ app.get('/api/rayone', authMiddleware, (req, res) => {
     zuteilungMap[z.rayon_id].push(z);
   }
 
-  // Fallback: Stamm-Rayon wenn keine Monatszuteilung
-  const stammbesetzung = db.prepare(`
-    SELECT m.stamm_rayon_id as rayon_id, m.id as mitarbeiter_id, m.name as mitarbeiter_name
-    FROM mitarbeiter m
-    WHERE m.aktiv = 1 AND m.stamm_rayon_id IS NOT NULL
-  `).all();
-
   // Heutiger Tagesplan (überschreibt Monatsplan für Anzeige)
   const tagesplanHeute = db.prepare(`
     SELECT t.rayon_id, t.mitarbeiter_id, m.name as mitarbeiter_name, t.ist_teilbesetzung
@@ -135,11 +128,7 @@ app.get('/api/rayone', authMiddleware, (req, res) => {
     if (tagesplanHeuteMap[r.id]) {
       besetzung = tagesplanHeuteMap[r.id];
     } else {
-      besetzung = zuteilungMap[r.id];
-      if (!besetzung || besetzung.length === 0) {
-        const stamm = stammbesetzung.filter(s => s.rayon_id === r.id);
-        besetzung = stamm.map(s => ({ ...s, ist_teilzuteilung: 0 }));
-      }
+      besetzung = zuteilungMap[r.id] || [];
     }
     return {
       ...r,
@@ -181,9 +170,7 @@ app.get('/api/rayone/:id', authMiddleware, (req, res) => {
     WHERE m.stamm_rayon_id = ? AND m.aktiv = 1
   `).all(req.params.id);
 
-  const aktuelle = aktuelleZuteilung.length > 0 ? aktuelleZuteilung : stammBesetzung.map(s => ({ ...s, ist_teilzuteilung: 0 }));
-
-  res.json({ ...rayon, mitarbeiter, aktuelle_besetzung: aktuelle, stamm_besetzung: stammBesetzung });
+  res.json({ ...rayon, mitarbeiter, aktuelle_besetzung: aktuelleZuteilung, stamm_besetzung: stammBesetzung });
 });
 
 app.put('/api/rayone/:id', authMiddleware, (req, res) => {
@@ -219,7 +206,7 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
   const heute = new Date().toISOString().split('T')[0];
 
   const mitarbeiter = db.prepare(`
-    SELECT m.*, r.nummer as stamm_rayon_nummer, r.bezeichnung as stamm_rayon_bezeichnung,
+    SELECT m.*, r.nummer as stamm_rayon_nummer, r.bezeichnung as stamm_rayon_bezeichnung, r.gebiet as stamm_rayon_gebiet,
       (SELECT f.kennzeichen FROM fahrzeuge f WHERE f.mitarbeiter_id = m.id AND f.aktiv = 1 LIMIT 1) as fahrzeug_kennzeichen,
       (SELECT f.id FROM fahrzeuge f WHERE f.mitarbeiter_id = m.id AND f.aktiv = 1 LIMIT 1) as fahrzeug_id
     FROM mitarbeiter m
@@ -230,7 +217,7 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
 
   // Monatszuteilungen laden
   const zuteilungen = db.prepare(`
-    SELECT mz.mitarbeiter_id, r.id as rayon_id, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung, mz.ist_teilzuteilung
+    SELECT mz.mitarbeiter_id, r.id as rayon_id, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung, r.gebiet as rayon_gebiet, mz.ist_teilzuteilung
     FROM monatszuteilungen mz
     JOIN rayone r ON mz.rayon_id = r.id
     WHERE mz.monat = ?
@@ -265,6 +252,7 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
       aktueller_rayon_id: ganz?.rayon_id || m.stamm_rayon_id,
       aktueller_rayon_nummer: ganz?.rayon_nummer || m.stamm_rayon_nummer,
       aktueller_rayon_bezeichnung: ganz?.rayon_bezeichnung || m.stamm_rayon_bezeichnung,
+      aktueller_rayon_gebiet: ganz?.rayon_gebiet || m.stamm_rayon_gebiet,
       hat_monatszuteilung: !!z,
       teilmitnahmen: z?.teilmitnahmen || [],
       heute_rayon_id: heute_eintrag?.rayon_id || null,
@@ -742,12 +730,13 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
   for (const s of stammbesetzung) stammMap[s.rayon_id] = s;
 
   const plan = rayone.map(rayon => {
-    // Primären Mitarbeiter ermitteln (Monatszuteilung oder Stamm)
+    // Primären Mitarbeiter ermitteln (nur Monatszuteilung, kein Stamm-Fallback)
     const zuteilung = zuteilungMap[rayon.id];
-    let stammMitarbeiterId = zuteilung?.mitarbeiter_id || stammMap[rayon.id]?.id;
-    let stammMitarbeiter = zuteilung
+    const stammzustellerInfo = stammMap[rayon.id]; // nur für Info-Anzeige
+    let stammMitarbeiterId = zuteilung?.mitarbeiter_id;
+    let stammMitarbeiter = stammMitarbeiterId
       ? db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(stammMitarbeiterId)
-      : stammMap[rayon.id];
+      : null;
 
     const tagesplanEintrag = tagesplanMap[rayon.id];
 
@@ -811,9 +800,33 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
   const deleteTeilmitnahmen = db.prepare('DELETE FROM tagesplan_teilmitnahmen WHERE datum = ? AND rayon_id = ?');
   const insertTeilmitnahme = db.prepare('INSERT OR IGNORE INTO tagesplan_teilmitnahmen (datum, rayon_id, mitarbeiter_id) VALUES (?, ?, ?)');
 
+  const monat = datum.substring(0, 7);
+
   db.exec('BEGIN');
   try {
     for (const eintrag of eintraege) {
+      // Wenn ein Mitarbeiter als Vollzustellung einem Rayon zugewiesen wird:
+      // Alle anderen Tagesplan-Vollzustellungen für diesen MA heute leeren
+      if (eintrag.mitarbeiter_id && !eintrag.ist_teilbesetzung) {
+        db.prepare(`
+          UPDATE tagespläne SET mitarbeiter_id = NULL, ist_vertretung = 0, vertritt_mitarbeiter_id = NULL
+          WHERE datum = ? AND mitarbeiter_id = ? AND rayon_id != ? AND ist_teilbesetzung = 0
+        `).run(datum, eintrag.mitarbeiter_id, eintrag.rayon_id);
+
+        // Für Rayone mit Monatszuteilung dieses MA: Null-Eintrag anlegen, damit Fallback nicht greift
+        const andereZuteilungen = db.prepare(`
+          SELECT rayon_id FROM monatszuteilungen
+          WHERE mitarbeiter_id = ? AND monat = ? AND rayon_id != ? AND ist_teilzuteilung = 0
+        `).all(eintrag.mitarbeiter_id, monat, eintrag.rayon_id);
+
+        for (const az of andereZuteilungen) {
+          db.prepare(`
+            INSERT OR IGNORE INTO tagespläne (datum, rayon_id, mitarbeiter_id, ist_vertretung, ist_teilbesetzung, bestätigt)
+            VALUES (?, ?, NULL, 0, 0, 1)
+          `).run(datum, az.rayon_id);
+        }
+      }
+
       upsert.run(
         datum,
         eintrag.rayon_id,

@@ -59,13 +59,10 @@ export default function Mitnahmeplanung() {
 
   // Aktuellen Rayon eines Mitarbeiters ermitteln (aus Monatszuteilung oder Stamm)
   const getMitarbeiterRayon = (m) => {
-    if (m.aktueller_rayon_nummer) {
-      return `Rayon ${m.aktueller_rayon_nummer}${m.aktueller_rayon_bezeichnung ? ' – ' + m.aktueller_rayon_bezeichnung : ''}`;
-    }
-    if (m.stamm_rayon_nummer) {
-      return `Rayon ${m.stamm_rayon_nummer}${m.stamm_rayon_bezeichnung ? ' – ' + m.stamm_rayon_bezeichnung : ''}`;
-    }
-    return null;
+    const nummer = m.aktueller_rayon_nummer || m.stamm_rayon_nummer;
+    if (!nummer) return null;
+    const ort = m.aktueller_rayon_gebiet || m.stamm_rayon_gebiet;
+    return `Rayon ${nummer}${ort ? ' – ' + ort : ''}`;
   };
 
   const handleBerechnen = async () => {

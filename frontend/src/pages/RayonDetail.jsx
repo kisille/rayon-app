@@ -108,6 +108,11 @@ export default function RayonDetail() {
                   </button>
                 </div>
                 {rayon.gebiet && <p className="text-gray-500 mt-0.5">{rayon.gebiet}</p>}
+                {stammBesetzung.length > 0 && (
+                  <p className="text-xs text-green-700 mt-0.5">
+                    Stammzusteller: {stammBesetzung.map(s => s.mitarbeiter_name).join(', ')}
+                  </p>
+                )}
                 <p className="text-xs mt-0.5">
                   {(() => {
                     const p = rayon.priorität || 'normal';
@@ -135,22 +140,6 @@ export default function RayonDetail() {
               Zuweisen
             </button>
           </div>
-          {/* Stammzusteller */}
-          {stammBesetzung.length > 0 && (
-            <div className="mb-3 pb-2 border-b border-green-100">
-              <div className="text-xs text-green-600 font-medium mb-1">Stammzusteller</div>
-              {stammBesetzung.map(s => (
-                <Link key={s.mitarbeiter_id} to={`/mitarbeiter/${s.mitarbeiter_id}`}
-                  className="flex items-center gap-2 text-sm hover:underline">
-                  <div className="w-6 h-6 bg-green-200 rounded-full flex items-center justify-center text-xs font-semibold text-green-800 flex-shrink-0">
-                    {s.mitarbeiter_name?.charAt(0)}
-                  </div>
-                  <span className="text-gray-700">{s.mitarbeiter_name}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-
           {aktuellebesetzung.length === 0 ? (
             <p className="text-gray-400 text-sm italic">Nicht besetzt</p>
           ) : (

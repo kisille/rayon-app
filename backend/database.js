@@ -352,6 +352,77 @@ function seedInitialData() {
     } catch(e) { console.error('Fahrzeug seed Fehler:', kennzeichen, e.message); }
   }
 
+  // Mitarbeiter aus Mitarbeiterliste
+  const mitarbeiterData = [
+    // Foto 1
+    ['418649',   'Lesinger Patafta Biserka'],
+    ['342962',   'Stark Claudia'],
+    ['401363',   'Racz Vivien'],
+    ['406328',   'Winkler Bettina'],
+    ['401252',   'Szenyeri Janos'],
+    ['86189',    'Sauerwein Dietmar'],
+    ['339785',   'Dwomoh-Gyamfi Nana'],
+    ['378701',   'Alsalamh Adel'],
+    ['106981',   'Moosbrugger Georg'],
+    ['425017',   'Al Melae Fayes'],
+    ['417902',   'Matrai Klaudia'],
+    ['418207',   'Ünver Kübra'],
+    ['416590',   'Entner Dario'],
+    ['377128',   'Bitschnau Martina'],
+    ['423521',   'Spisiak Martin'],
+    ['369399',   'Ülker Levent'],
+    ['400569',   'Kantor Alex'],
+    ['422591',   'Knobelspieß Kilian'],
+    ['90023882', 'Matrai Kristof Erik'],
+    ['90022756', 'Farha Ahmed'],
+    ['333721',   'Kröpfl Marion'],
+    ['90023826', 'Alkurdi Khaled'],
+    ['338170',   'Hanning Jan'],
+    ['230596',   'Frank-Rauter Isabella'],
+    ['359852',   'Shabani Xhevat'],
+    ['26402',    'Jochum Erwin'],
+    ['141973',   'Rudigier Walter'],
+    ['354319',   'Hansel Nataliya'],
+    ['359778',   'Öztürk Sükran'],
+    ['422015',   'Antonenko Zhanna'],
+    ['422042',   'Omer Amer'],
+    ['419119',   'Alhussain Alohamad Qutada'],
+    ['413946',   'Fischer Maurice'],
+    ['424211',   'Gaßner David'],
+    ['355431',   'Federer Tanja'],
+    ['19364',    'Bischof Reinhold'],
+    ['345439',   'Bertsch Ruth'],
+    ['334291',   'Zeller Fabienne'],
+    ['415106',   'Antonenko Artem'],
+    ['418217',   'Beiter Liam'],
+    ['425480',   'Demir Büsra'],
+    ['425885',   'Yaryna Lytvyn'],
+    ['90033401', 'Marton Abraham'],
+    ['90033227', 'Dominik Balazs'],
+    ['90020590', 'Bucsa Andrei Paul'],
+    ['90023831', 'Al Koosa Ziad'],
+    // Foto 2
+    ['381792',   'Voicianu Christian-Narcis'],
+    ['417921',   'Yarar Kemal'],
+    ['422486',   'Catal Mehmed'],
+    ['422904',   'Illes Mihaly'],
+    ['383270',   'Walter Wolfgang'],
+    ['424151',   'Alsamara Ghassan'],
+    ['424137',   'Liura Taras'],
+    ['374765',   'Dreznjak Doris'],
+    ['359973',   'Kampl Silke'],
+    ['65071',    'Schäfer Renate'],
+    ['350611',   'Zerlauth Margit'],
+    ['407009',   'Kantor Laszlo'],
+    ['421468',   'Taher Daher Asaad'],
+  ];
+
+  for (const [personalnummer, name] of mitarbeiterData) {
+    try {
+      db.prepare('INSERT OR IGNORE INTO mitarbeiter (personalnummer, name) VALUES (?, ?)').run(personalnummer, name);
+    } catch(e) { console.error('Mitarbeiter seed Fehler:', personalnummer, e.message); }
+  }
+
   // Standard-Admin anlegen falls noch keiner existiert
   const bcrypt = require('bcryptjs');
   const adminCount = db.prepare('SELECT COUNT(*) as count FROM benutzer').get();

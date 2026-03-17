@@ -89,6 +89,7 @@ export default function Tagesplan() {
             className="input w-auto"
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
+            autoComplete="off"
           />
           <button
             onClick={() => setMonatModalOffen(true)}
@@ -432,6 +433,7 @@ function RayonZuweisungModal({ eintrag, datum, mitarbeiter, plan, onClose, onSav
                 value={vollSuche}
                 onChange={(e) => setVollSuche(e.target.value)}
                 autoFocus
+                autoComplete="off"
               />
             </div>
             <div className="border border-gray-200 rounded-lg overflow-hidden max-h-44 overflow-y-auto">
@@ -513,6 +515,7 @@ function RayonZuweisungModal({ eintrag, datum, mitarbeiter, plan, onClose, onSav
                   placeholder="Teilmitnahme hinzufügen..."
                   value={teilSuche}
                   onChange={(e) => { setTeilSuche(e.target.value); setTeilAuswahl(''); }}
+                  autoComplete="off"
                 />
               </div>
             </div>

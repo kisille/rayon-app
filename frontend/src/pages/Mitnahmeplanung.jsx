@@ -136,6 +136,7 @@ export default function Mitnahmeplanung() {
           className="input w-auto"
           value={datum}
           onChange={(e) => setDatum(e.target.value)}
+          autoComplete="off"
         />
       </div>
 

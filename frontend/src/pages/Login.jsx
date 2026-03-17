@@ -56,6 +56,7 @@ export default function Login() {
                 placeholder="admin"
                 required
                 autoFocus
+                autoComplete="off"
               />
             </div>
             <div>
@@ -67,6 +68,7 @@ export default function Login() {
                 onChange={(e) => setForm({ ...form, passwort: e.target.value })}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
               />
             </div>
 

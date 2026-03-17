@@ -317,6 +317,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
                 required
                 value={formDaten.von}
                 onChange={(e) => setFormDaten({ ...formDaten, von: e.target.value, bis: formDaten.bis < e.target.value ? e.target.value : formDaten.bis })}
+                autoComplete="off"
               />
             </div>
             <div>
@@ -328,6 +329,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
                 value={formDaten.bis}
                 min={formDaten.von}
                 onChange={(e) => setFormDaten({ ...formDaten, bis: e.target.value })}
+                autoComplete="off"
               />
             </div>
           </div>

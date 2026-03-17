@@ -209,7 +209,8 @@ export default function MitarbeiterDetail() {
           <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div>
               <label className="label">Name *</label>
-              <input className="input" required value={formDaten.name} autoComplete="new-password"
+              <input className="input" required value={formDaten.name} autoComplete="off"
+                name="x-name" data-lpignore="true"
                 onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
             </div>
             <div>
@@ -219,12 +220,14 @@ export default function MitarbeiterDetail() {
             </div>
             <div>
               <label className="label">Telefon</label>
-              <input className="input" value={formDaten.telefon} autoComplete="new-password"
+              <input className="input" value={formDaten.telefon} autoComplete="off"
+                name="x-telefon" data-lpignore="true"
                 onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
             </div>
             <div>
               <label className="label">E-Mail</label>
-              <input type="text" className="input" value={formDaten.email} autoComplete="new-password"
+              <input type="text" className="input" value={formDaten.email} autoComplete="off"
+                name="x-email" data-lpignore="true"
                 onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
             </div>
             <div>

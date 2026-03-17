@@ -521,6 +521,7 @@ export default function Fahrzeuge() {
                       value={formular.erstzulassung}
                       onChange={e => setFormular(f => ({ ...f, erstzulassung: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
+                      autoComplete="off"
                     />
                   </div>
                   <div>
@@ -530,6 +531,7 @@ export default function Fahrzeuge() {
                       value={formular.letzte_vorführung}
                       onChange={e => setFormular(f => ({ ...f, letzte_vorführung: e.target.value }))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
+                      autoComplete="off"
                     />
                   </div>
                 </div>

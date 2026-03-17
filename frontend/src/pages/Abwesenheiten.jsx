@@ -104,11 +104,11 @@ export default function Abwesenheiten() {
         <div className="flex items-center gap-4 flex-wrap">
           <div>
             <label className="label text-xs">Von</label>
-            <input type="date" className="input" value={von} onChange={(e) => setVon(e.target.value)} />
+            <input type="date" className="input" value={von} onChange={(e) => setVon(e.target.value)} autoComplete="off" />
           </div>
           <div>
             <label className="label text-xs">Bis</label>
-            <input type="date" className="input" value={bis} onChange={(e) => setBis(e.target.value)} />
+            <input type="date" className="input" value={bis} onChange={(e) => setBis(e.target.value)} autoComplete="off" />
           </div>
           <button
             className="btn-secondary mt-5"
@@ -199,13 +199,13 @@ export default function Abwesenheiten() {
               <div>
                 <label className="label">Von *</label>
                 <input type="date" className="input" required value={formDaten.von}
-                  onChange={(e) => setFormDaten({ ...formDaten, von: e.target.value })} />
+                  onChange={(e) => setFormDaten({ ...formDaten, von: e.target.value })} autoComplete="off" />
               </div>
               <div>
                 <label className="label">Bis *</label>
                 <input type="date" className="input" required value={formDaten.bis}
                   min={formDaten.von}
-                  onChange={(e) => setFormDaten({ ...formDaten, bis: e.target.value })} />
+                  onChange={(e) => setFormDaten({ ...formDaten, bis: e.target.value })} autoComplete="off" />
               </div>
             </div>
             <div>

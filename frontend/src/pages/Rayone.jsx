@@ -102,6 +102,7 @@ export default function Rayone() {
           placeholder="Nummer, Bezeichnung oder Gebiet suchen..."
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
+          autoComplete="off"
         />
       </div>
 
@@ -193,6 +194,7 @@ export default function Rayone() {
                   onChange={e => setFormular(f => ({ ...f, nummer: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                   placeholder="z.B. 9010"
+                  autoComplete="off"
                 />
                 <p className="text-xs text-gray-400 mt-1">Vierstellige Bezirksnummer (z.B. 0010 → 10, 9010 → 9010)</p>
               </div>
@@ -205,6 +207,7 @@ export default function Rayone() {
                   onChange={e => setFormular(f => ({ ...f, bezeichnung: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                   placeholder={formular.nummer ? `Rayon ${String(formular.nummer).padStart(4, '0')}` : 'Automatisch aus Nummer'}
+                  autoComplete="off"
                 />
               </div>
 
@@ -216,6 +219,7 @@ export default function Rayone() {
                   onChange={e => setFormular(f => ({ ...f, gebiet: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
                   placeholder="z.B. Stadtmitte, Außenbezirk..."
+                  autoComplete="off"
                 />
               </div>
 

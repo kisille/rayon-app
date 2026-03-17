@@ -270,6 +270,17 @@ function seedInitialData() {
     [9240, 'Rayon 9240', null, 'normal'],
     [9250, 'Rayon 9250', null, 'normal'],
     [9260, 'Rayon 9260', null, 'normal'],
+    // Rayone aus Dienstplan März 2026 (neu)
+    [170,  'Rayon 0170', null, 'normal'],
+    [9190, 'Rayon 9190', null, 'normal'],
+    [6010, 'Rayon 6010', null, 'normal'],
+    [6030, 'Rayon 6030', null, 'normal'],
+    [6040, 'Rayon 6040', null, 'normal'],
+    [6050, 'Rayon 6050', null, 'normal'],
+    [6060, 'Rayon 6060', null, 'normal'],
+    [6080, 'Rayon 6080', null, 'normal'],
+    [6210, 'Rayon 6210', null, 'normal'],
+    [6220, 'Rayon 6220', null, 'normal'],
   ];
 
   for (const [nummer, bezeichnung, gebiet, prio] of rayonData) {
@@ -423,12 +434,83 @@ function seedInitialData() {
     } catch(e) { console.error('Mitarbeiter seed Fehler:', personalnummer, e.message); }
   }
 
+  // Monatszuteilungen März 2026 – aus Dienstplan abgelesen
+  seedMonatszuteilungen2026_03();
+
   // Standard-Admin anlegen falls noch keiner existiert
   const bcrypt = require('bcryptjs');
   const adminCount = db.prepare('SELECT COUNT(*) as count FROM benutzer').get();
   if (Number(adminCount.count) === 0) {
     const hash = bcrypt.hashSync('admin123', 10);
     db.prepare('INSERT INTO benutzer (benutzername, passwort_hash, name) VALUES (?, ?, ?)').run('admin', hash, 'Administrator');
+  }
+}
+
+function seedMonatszuteilungen2026_03() {
+  const monat = '2026-03';
+  // PNR → Rayon-Nummer (abgelesen aus Dienstplan-Foto März 2026, gerundet auf 10er)
+  const zuteilungen = [
+    ['418649', 9050],   // Lesinger Patafta Biserka
+    ['342962', 10],     // Stark Claudia
+    ['401363', 40],     // Racz Vivien
+    ['86189',  130],    // Sauerwein Dietmar
+    ['339785', 130],    // Dwomoh-Gyamfi Nana
+    ['378701', 150],    // Alsalamh Adel
+    ['106981', 150],    // Moosbrugger Georg
+    ['425017', 90],     // Al Melae Fayes
+    ['417902', 140],    // Matrai Klaudia
+    ['418207', 160],    // Ünver Kübra
+    ['416590', 9190],   // Entner Dario
+    ['377128', 9150],   // Bitschnau Martina
+    ['423521', 100],    // Spisiak Martin
+    ['369399', 40],     // Ülker Levent
+    ['400569', 160],    // Kantor Alex
+    ['422591', 9020],   // Knobelspieß Kilian
+    ['90023882', 9030], // Matrai Kristof Erik
+    ['90022756', 9060], // Farha Ahmed
+    ['333721', 9060],   // Kröpfl Marion
+    ['338170', 9070],   // Hanning Jan
+    ['230596', 9080],   // Frank-Rauter Isabella
+    ['359852', 9100],   // Shabani Xhevat
+    ['26402',  9110],   // Jochum Erwin
+    ['354319', 9160],   // Hansel Nataliya
+    ['422015', 9180],   // Antonenko Zhanna
+    ['422042', 9180],   // Omer Amer
+    ['419119', 9260],   // Alhussain Alohamad Qutada
+    ['413946', 60],     // Fischer Maurice
+    ['424211', 9200],   // Gaßner David
+    ['355431', 9210],   // Federer Tanja
+    ['19364',  9220],   // Bischof Reinhold
+    ['345439', 9230],   // Bertsch Ruth
+    ['334291', 9120],   // Zeller Fabienne
+    ['415106', 9240],   // Antonenko Artem
+    ['418217', 9140],   // Beiter Liam
+    ['425480', 170],    // Demir Büsra
+    ['425885', 20],     // Yaryna Lytvyn
+    ['90033401', 9130], // Marton Abraham
+    ['90020590', 6030], // Bucsa Andrei Paul
+    // Seite 2 (Team 6700T02)
+    ['381792', 6080],   // Voicianu Christian-Narcis
+    ['417921', 6010],   // Yarar Kemal
+    ['422486', 6060],   // Catal Mehmed
+    ['422904', 6010],   // Illes Mihaly
+    ['424137', 6050],   // Liura Taras
+    ['359973', 6220],   // Kampf Silke
+    ['407009', 6210],   // Kantor Laszlo
+    ['421468', 6210],   // Taher Daher Asaad
+  ];
+
+  const insertZuteilung = db.prepare(`
+    INSERT OR IGNORE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung)
+    SELECT ?, m.id, r.id, 0
+    FROM mitarbeiter m, rayone r
+    WHERE m.personalnummer = ? AND r.nummer = ? AND m.aktiv = 1 AND r.aktiv = 1
+  `);
+
+  for (const [pnr, rayonNummer] of zuteilungen) {
+    try {
+      insertZuteilung.run(monat, pnr, rayonNummer);
+    } catch(e) { console.error('Monatszuteilung seed Fehler:', pnr, rayonNummer, e.message); }
   }
 }
 

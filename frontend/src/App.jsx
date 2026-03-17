@@ -11,6 +11,7 @@ import Tagesplan from './pages/Tagesplan.jsx';
 import Mitnahmeplanung from './pages/Mitnahmeplanung.jsx';
 import Statistik from './pages/Statistik.jsx';
 import Fahrzeuge from './pages/Fahrzeuge.jsx';
+import DienstplanImport from './pages/DienstplanImport.jsx';
 
 // Auth-Kontext
 export const AuthContext = createContext(null);
@@ -53,6 +54,7 @@ function App() {
             <Route path="rayone/:id" element={<RayonDetail />} />
             <Route path="statistik" element={<Statistik />} />
             <Route path="fahrzeuge" element={<Fahrzeuge />} />
+            <Route path="dienstplan-import" element={<DienstplanImport />} />
             {/* Legacy-Redirect */}
             <Route path="vertretung" element={<Navigate to="/mitnahme" replace />} />
           </Route>

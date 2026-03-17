@@ -938,6 +938,41 @@ app.post('/api/vertretung/berechnen', authMiddleware, (req, res) => {
   res.redirect(307, '/api/mitnahme/berechnen');
 });
 
+// ─── Dienstplan-Import ────────────────────────────────────────────────────────
+app.post('/api/dienstplan/import', authMiddleware, (req, res) => {
+  const { monat, eintraege, ersetzen } = req.body;
+  const db = getDb();
+
+  if (!monat || !Array.isArray(eintraege)) {
+    return res.status(400).json({ fehler: 'monat und eintraege erforderlich' });
+  }
+
+  const errors = [];
+  let importiert = 0;
+
+  db.exec('BEGIN');
+  try {
+    if (ersetzen) {
+      db.prepare('DELETE FROM monatszuteilungen WHERE monat = ?').run(monat);
+    }
+    for (const e of eintraege) {
+      const ma = db.prepare('SELECT id, name FROM mitarbeiter WHERE personalnummer = ? AND aktiv = 1').get(String(e.pnr));
+      const rayon = db.prepare('SELECT id FROM rayone WHERE nummer = ? AND aktiv = 1').get(Number(e.rayon_nummer));
+      if (!ma) { errors.push(`PNR ${e.pnr} nicht gefunden`); continue; }
+      if (!rayon) { errors.push(`Rayon ${e.rayon_nummer} nicht gefunden`); continue; }
+      db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
+        .run(monat, ma.id, rayon.id);
+      importiert++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ fehler: err.message });
+  }
+
+  res.json({ erfolg: true, importiert, fehler: errors });
+});
+
 // ─── Fairness-Statistik ───────────────────────────────────────────────────────
 app.get('/api/statistik', authMiddleware, (req, res) => {
   const db = getDb();

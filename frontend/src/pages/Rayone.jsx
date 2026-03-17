@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MagnifyingGlassIcon, MapIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 
 const PRIORITÄT_BADGE = {
@@ -10,10 +10,17 @@ const PRIORITÄT_BADGE = {
 };
 const PRIORITÄT_LABEL = { hoch: 'Hoch', normal: 'Normal', wenig: 'Wenig' };
 
+function formatRayonNr(nummer) {
+  return String(nummer).padStart(4, '0');
+}
+
 export default function Rayone() {
   const [rayone, setRayone] = useState([]);
   const [suche, setSuche] = useState('');
   const [laden, setLaden] = useState(true);
+  const [modalOffen, setModalOffen] = useState(false);
+  const [formular, setFormular] = useState({ nummer: '', bezeichnung: '', gebiet: '', priorität: 'normal' });
+  const [fehler, setFehler] = useState('');
 
   const monat = new Date().toISOString().substring(0, 7);
 
@@ -26,7 +33,6 @@ export default function Rayone() {
 
   useEffect(() => {
     ladeData();
-    // Auto-refresh wenn Tab/Fenster wieder aktiv wird
     const onVisible = () => { if (document.visibilityState === 'visible') ladeData(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', ladeData);
@@ -37,10 +43,41 @@ export default function Rayone() {
   }, [ladeData]);
 
   const gefilterte = rayone.filter(r =>
-    r.nummer.toString().includes(suche) ||
+    formatRayonNr(r.nummer).includes(suche) ||
     r.bezeichnung.toLowerCase().includes(suche.toLowerCase()) ||
     (r.gebiet || '').toLowerCase().includes(suche.toLowerCase())
   );
+
+  const öffneNeu = () => {
+    setFormular({ nummer: '', bezeichnung: '', gebiet: '', priorität: 'normal' });
+    setFehler('');
+    setModalOffen(true);
+  };
+
+  const erstellen = async (e) => {
+    e.preventDefault();
+    setFehler('');
+    try {
+      await api.post('/rayone', {
+        nummer: Number(formular.nummer),
+        bezeichnung: formular.bezeichnung || `Rayon ${String(formular.nummer).padStart(4, '0')}`,
+        gebiet: formular.gebiet || null,
+        priorität: formular.priorität,
+      });
+      setModalOffen(false);
+      ladeData();
+    } catch (err) {
+      setFehler(err.response?.data?.fehler || 'Fehler beim Erstellen');
+    }
+  };
+
+  const löschen = async (e, id) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm('Rayon wirklich deaktivieren?')) return;
+    await api.delete(`/rayone/${id}`);
+    ladeData();
+  };
 
   if (laden) return <div className="flex items-center justify-center h-64 text-gray-400">Laden...</div>;
 
@@ -51,6 +88,10 @@ export default function Rayone() {
           <h1 className="text-2xl font-bold text-gray-900">Rayone</h1>
           <p className="text-gray-500 mt-1">Alle {rayone.length} Zustellbezirke</p>
         </div>
+        <button onClick={öffneNeu} className="btn-primary flex items-center gap-2">
+          <PlusIcon className="w-5 h-5" />
+          Neuer Rayon
+        </button>
       </div>
 
       <div className="relative mb-4">
@@ -78,14 +119,23 @@ export default function Rayone() {
                   <MapIcon className="w-5 h-5 text-yellow-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  {/* Titel + Priorität oben rechts */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-semibold text-sm text-gray-900 group-hover:text-yellow-700">
                       {r.bezeichnung}
+                      <span className="ml-1.5 text-xs text-gray-400 font-normal">{formatRayonNr(r.nummer)}</span>
                     </div>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${PRIORITÄT_BADGE[prio] || PRIORITÄT_BADGE.normal}`}>
-                      {PRIORITÄT_LABEL[prio] || prio}
-                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${PRIORITÄT_BADGE[prio] || PRIORITÄT_BADGE.normal}`}>
+                        {PRIORITÄT_LABEL[prio] || prio}
+                      </span>
+                      <button
+                        onClick={(e) => löschen(e, r.id)}
+                        className="p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                        title="Rayon entfernen"
+                      >
+                        <TrashIcon className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   {r.gebiet && <div className="text-xs text-gray-500 mt-0.5">{r.gebiet}</div>}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -121,6 +171,83 @@ export default function Rayone() {
           </div>
         )}
       </div>
+
+      {/* Modal: Neuer Rayon */}
+      {modalOffen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Neuer Rayon</h2>
+              <button onClick={() => setModalOffen(false)} className="text-gray-400 hover:text-gray-600">
+                <XMarkIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={erstellen} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Zustellbezirk-Nummer *</label>
+                <input
+                  type="number"
+                  required
+                  value={formular.nummer}
+                  onChange={e => setFormular(f => ({ ...f, nummer: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                  placeholder="z.B. 9010"
+                />
+                <p className="text-xs text-gray-400 mt-1">Vierstellige Bezirksnummer (z.B. 0010 → 10, 9010 → 9010)</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Bezeichnung</label>
+                <input
+                  type="text"
+                  value={formular.bezeichnung}
+                  onChange={e => setFormular(f => ({ ...f, bezeichnung: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                  placeholder={formular.nummer ? `Rayon ${String(formular.nummer).padStart(4, '0')}` : 'Automatisch aus Nummer'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gebiet / Beschreibung</label>
+                <input
+                  type="text"
+                  value={formular.gebiet}
+                  onChange={e => setFormular(f => ({ ...f, gebiet: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                  placeholder="z.B. Stadtmitte, Außenbezirk..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priorität</label>
+                <select
+                  value={formular.priorität}
+                  onChange={e => setFormular(f => ({ ...f, priorität: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400"
+                >
+                  <option value="hoch">Hoch</option>
+                  <option value="normal">Normal</option>
+                  <option value="wenig">Wenig</option>
+                </select>
+              </div>
+
+              {fehler && (
+                <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{fehler}</div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setModalOffen(false)} className="btn-secondary flex-1">
+                  Abbrechen
+                </button>
+                <button type="submit" className="btn-primary flex-1">
+                  Erstellen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

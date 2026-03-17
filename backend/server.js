@@ -194,6 +194,24 @@ app.put('/api/rayone/:id', authMiddleware, (req, res) => {
   res.json({ erfolg: true });
 });
 
+app.post('/api/rayone', authMiddleware, (req, res) => {
+  const { nummer, bezeichnung, gebiet, priorität } = req.body;
+  const db = getDb();
+  if (!nummer || !bezeichnung) return res.status(400).json({ fehler: 'Nummer und Bezeichnung erforderlich' });
+  const exists = db.prepare('SELECT id FROM rayone WHERE nummer = ?').get(nummer);
+  if (exists) return res.status(409).json({ fehler: `Rayon ${nummer} existiert bereits` });
+  const result = db.prepare(
+    'INSERT INTO rayone (nummer, bezeichnung, gebiet, priorität) VALUES (?, ?, ?, ?)'
+  ).run(Number(nummer), bezeichnung, gebiet || null, priorität || 'normal');
+  res.json({ id: Number(result.lastInsertRowid), erfolg: true });
+});
+
+app.delete('/api/rayone/:id', authMiddleware, (req, res) => {
+  const db = getDb();
+  db.prepare('UPDATE rayone SET aktiv = 0 WHERE id = ?').run(req.params.id);
+  res.json({ erfolg: true });
+});
+
 // ─── Mitarbeiter ──────────────────────────────────────────────────────────────
 app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
   const db = getDb();
@@ -635,22 +653,22 @@ app.get('/api/fahrzeuge/:id', authMiddleware, (req, res) => {
 });
 
 app.post('/api/fahrzeuge', authMiddleware, (req, res) => {
-  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung } = req.body;
+  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung } = req.body;
   const db = getDb();
   const result = db.prepare(`
-    INSERT INTO fahrzeuge (kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status || 'verfügbar', mitarbeiter_id || null, bemerkung || null);
+    INSERT INTO fahrzeuge (kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status || 'verfügbar', mitarbeiter_id || null, bemerkung || null, erstzulassung || null, letzte_vorführung || null);
   res.json({ id: Number(result.lastInsertRowid), erfolg: true });
 });
 
 app.put('/api/fahrzeuge/:id', authMiddleware, (req, res) => {
-  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung } = req.body;
+  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung } = req.body;
   const db = getDb();
   db.prepare(`
-    UPDATE fahrzeuge SET kennzeichen = ?, marke = ?, modell = ?, antrieb = ?, typ = ?, status = ?, mitarbeiter_id = ?, bemerkung = ?
+    UPDATE fahrzeuge SET kennzeichen = ?, marke = ?, modell = ?, antrieb = ?, typ = ?, status = ?, mitarbeiter_id = ?, bemerkung = ?, erstzulassung = ?, letzte_vorführung = ?
     WHERE id = ?
-  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status, mitarbeiter_id || null, bemerkung || null, req.params.id);
+  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status, mitarbeiter_id || null, bemerkung || null, erstzulassung || null, letzte_vorführung || null, req.params.id);
   res.json({ erfolg: true });
 });
 

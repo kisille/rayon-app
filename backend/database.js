@@ -116,13 +116,15 @@ function initSchema() {
     CREATE TABLE IF NOT EXISTS fahrzeuge (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       kennzeichen TEXT UNIQUE NOT NULL,
-      marke TEXT NOT NULL CHECK(marke IN ('Maxus', 'Peugeot', 'Mercedes')),
+      marke TEXT NOT NULL,
       modell TEXT,
       antrieb TEXT NOT NULL CHECK(antrieb IN ('Elektro', 'Diesel')),
       typ TEXT NOT NULL DEFAULT 'Zustellfahrzeug',
       status TEXT NOT NULL DEFAULT 'verfügbar' CHECK(status IN ('verfügbar', 'im_einsatz', 'werkstatt', 'ausser_betrieb')),
       mitarbeiter_id INTEGER,
       bemerkung TEXT,
+      erstzulassung TEXT,
+      letzte_vorführung TEXT,
       aktiv INTEGER DEFAULT 1,
       erstellt_am TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id)
@@ -148,6 +150,39 @@ function initSchema() {
   // Rayon-Bezeichnungen: feste "Rayon X"-Bezeichnung durch beschreibenden Gebietsnamen ersetzen
   try { db.exec("UPDATE rayone SET bezeichnung = gebiet WHERE bezeichnung = ('Rayon ' || CAST(nummer AS TEXT)) AND gebiet IS NOT NULL AND gebiet != ''"); } catch {}
 
+  // Migration: fahrzeuge Tabelle neu aufbauen ohne marke CHECK-Constraint (erweiterte Marken)
+  try {
+    const tbl = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='fahrzeuge'").get();
+    if (tbl && tbl.sql && tbl.sql.includes("CHECK(marke IN")) {
+      db.exec(`PRAGMA foreign_keys = OFF`);
+      db.exec(`CREATE TABLE fahrzeuge_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kennzeichen TEXT UNIQUE NOT NULL,
+        marke TEXT NOT NULL,
+        modell TEXT,
+        antrieb TEXT NOT NULL CHECK(antrieb IN ('Elektro', 'Diesel')),
+        typ TEXT NOT NULL DEFAULT 'Zustellfahrzeug',
+        status TEXT NOT NULL DEFAULT 'verfügbar' CHECK(status IN ('verfügbar', 'im_einsatz', 'werkstatt', 'ausser_betrieb')),
+        mitarbeiter_id INTEGER,
+        bemerkung TEXT,
+        erstzulassung TEXT,
+        letzte_vorführung TEXT,
+        aktiv INTEGER DEFAULT 1,
+        erstellt_am TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id)
+      )`);
+      db.exec(`INSERT INTO fahrzeuge_new (id, kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, aktiv, erstellt_am)
+               SELECT id, kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, aktiv, erstellt_am FROM fahrzeuge`);
+      db.exec(`DROP TABLE fahrzeuge`);
+      db.exec(`ALTER TABLE fahrzeuge_new RENAME TO fahrzeuge`);
+      db.exec(`PRAGMA foreign_keys = ON`);
+    }
+  } catch (e) { console.error('Migration fahrzeuge rebuild:', e.message); }
+
+  // Migration: neue Spalten für Fahrzeuge (falls Rebuild nicht erfolgt ist)
+  try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN erstzulassung TEXT"); } catch {}
+  try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN letzte_vorführung TEXT"); } catch {}
+
   // Migration: UNIQUE(monat, mitarbeiter_id) → UNIQUE(monat, mitarbeiter_id, rayon_id)
   // Ermöglicht 1 Ganzmitnahme + max. 2 Teilmitnahmen pro Mitarbeiter pro Monat
   try {
@@ -169,69 +204,152 @@ function initSchema() {
     }
   } catch (e) { console.error('Migration monatszuteilungen fehlgeschlagen:', e.message); }
 
-  // Rayone 34–37 nachträglich einfügen falls noch nicht vorhanden
-  const neueRayone = [
-    [34, 'Rayon 34', 'Außenbezirk 7', 'normal'],
-    [35, 'Rayon 35', 'Außenbezirk 8', 'normal'],
-    [36, 'Rayon 36', 'Außenbezirk 9', 'normal'],
-    [37, 'Rayon 37', 'Außenbezirk 10', 'normal'],
-  ];
-  for (const [nr, bez, geb, prio] of neueRayone) {
-    try {
-      db.prepare('INSERT OR IGNORE INTO rayone (nummer, bezeichnung, gebiet, priorität) VALUES (?, ?, ?, ?)').run(nr, bez, geb, prio);
-    } catch {}
-  }
-
   seedInitialData();
 }
 
 function seedInitialData() {
-  // INSERT OR IGNORE damit fehlende Rayone nachträglich ergänzt werden
-  // (z.B. wenn die Migration Rayone 34-37 bereits eingefügt hat, aber 1-33 fehlen)
+  // Platzhalter-Rayone entfernen falls noch nicht genutzt
+  const placeholderGebiete = [
+    'Stadtmitte Nord', 'Stadtmitte Süd', 'Westend', 'Ostend', 'Nordstadt', 'Südstadt',
+    'Altstadt', 'Neustadt', 'Industriegebiet West', 'Industriegebiet Ost',
+    'Wohngebiet A', 'Wohngebiet B', 'Wohngebiet C', 'Gewerbegebiet', 'Bahnhofsviertel',
+    'Universitätsviertel', 'Krankenhaus-Umgebung', 'Einkaufszentrum', 'Stadtpark-Umgebung',
+    'Vorort Nord', 'Vorort Süd', 'Vorort West', 'Vorort Ost',
+    'Dorf A', 'Dorf B', 'Dorf C', 'Dorf D',
+    'Außenbezirk 1', 'Außenbezirk 2', 'Außenbezirk 3', 'Außenbezirk 4', 'Außenbezirk 5',
+    'Außenbezirk 6', 'Außenbezirk 7', 'Außenbezirk 8', 'Außenbezirk 9', 'Außenbezirk 10',
+  ];
+  try {
+    const placeholders = db.prepare(
+      `SELECT id FROM rayone WHERE gebiet IN (${placeholderGebiete.map(() => '?').join(',')})
+       AND NOT EXISTS (SELECT 1 FROM kompetenzen WHERE rayon_id = rayone.id)
+       AND NOT EXISTS (SELECT 1 FROM monatszuteilungen WHERE rayon_id = rayone.id)
+       AND NOT EXISTS (SELECT 1 FROM tagespläne WHERE rayon_id = rayone.id)
+       AND NOT EXISTS (SELECT 1 FROM mitarbeiter WHERE stamm_rayon_id = rayone.id)`
+    ).all(...placeholderGebiete);
+    for (const r of placeholders) {
+      db.prepare('DELETE FROM rayone WHERE id = ?').run(r.id);
+    }
+  } catch (e) { console.error('Cleanup placeholder Rayone:', e.message); }
+
+  // Echte Zustellbezirke aus Österreichische Post
   const rayonData = [
-    [1, 'Rayon 1', 'Stadtmitte Nord', 'normal'],
-    [2, 'Rayon 2', 'Stadtmitte Süd', 'normal'],
-    [3, 'Rayon 3', 'Westend', 'normal'],
-    [4, 'Rayon 4', 'Ostend', 'normal'],
-    [5, 'Rayon 5', 'Nordstadt', 'normal'],
-    [6, 'Rayon 6', 'Südstadt', 'normal'],
-    [7, 'Rayon 7', 'Altstadt', 'normal'],
-    [8, 'Rayon 8', 'Neustadt', 'normal'],
-    [9, 'Rayon 9', 'Industriegebiet West', 'normal'],
-    [10, 'Rayon 10', 'Industriegebiet Ost', 'normal'],
-    [11, 'Rayon 11', 'Wohngebiet A', 'normal'],
-    [12, 'Rayon 12', 'Wohngebiet B', 'normal'],
-    [13, 'Rayon 13', 'Wohngebiet C', 'normal'],
-    [14, 'Rayon 14', 'Gewerbegebiet', 'normal'],
-    [15, 'Rayon 15', 'Bahnhofsviertel', 'normal'],
-    [16, 'Rayon 16', 'Universitätsviertel', 'normal'],
-    [17, 'Rayon 17', 'Krankenhaus-Umgebung', 'normal'],
-    [18, 'Rayon 18', 'Einkaufszentrum', 'normal'],
-    [19, 'Rayon 19', 'Stadtpark-Umgebung', 'normal'],
-    [20, 'Rayon 20', 'Vorort Nord', 'normal'],
-    [21, 'Rayon 21', 'Vorort Süd', 'normal'],
-    [22, 'Rayon 22', 'Vorort West', 'normal'],
-    [23, 'Rayon 23', 'Vorort Ost', 'normal'],
-    [24, 'Rayon 24', 'Dorf A', 'normal'],
-    [25, 'Rayon 25', 'Dorf B', 'normal'],
-    [26, 'Rayon 26', 'Dorf C', 'normal'],
-    [27, 'Rayon 27', 'Dorf D', 'normal'],
-    [28, 'Rayon 28', 'Außenbezirk 1', 'normal'],
-    [29, 'Rayon 29', 'Außenbezirk 2', 'normal'],
-    [30, 'Rayon 30', 'Außenbezirk 3', 'normal'],
-    [31, 'Rayon 31', 'Außenbezirk 4', 'normal'],
-    [32, 'Rayon 32', 'Außenbezirk 5', 'normal'],
-    [33, 'Rayon 33', 'Außenbezirk 6', 'normal'],
-    [34, 'Rayon 34', 'Außenbezirk 7', 'normal'],
-    [35, 'Rayon 35', 'Außenbezirk 8', 'normal'],
-    [36, 'Rayon 36', 'Außenbezirk 9', 'normal'],
-    [37, 'Rayon 37', 'Außenbezirk 10', 'normal'],
+    [10,   'Rayon 0010', null, 'normal'],
+    [20,   'Rayon 0020', null, 'normal'],
+    [40,   'Rayon 0040', null, 'normal'],
+    [60,   'Rayon 0060', null, 'normal'],
+    [80,   'Rayon 0080', null, 'normal'],
+    [90,   'Rayon 0090', null, 'normal'],
+    [100,  'Rayon 0100', null, 'normal'],
+    [130,  'Rayon 0130', null, 'normal'],
+    [140,  'Rayon 0140', null, 'normal'],
+    [150,  'Rayon 0150', null, 'normal'],
+    [160,  'Rayon 0160', null, 'normal'],
+    [9010, 'Rayon 9010', null, 'normal'],
+    [9020, 'Rayon 9020', null, 'normal'],
+    [9030, 'Rayon 9030', null, 'normal'],
+    [9040, 'Rayon 9040', null, 'normal'],
+    [9050, 'Rayon 9050', null, 'normal'],
+    [9060, 'Rayon 9060', null, 'normal'],
+    [9070, 'Rayon 9070', null, 'normal'],
+    [9080, 'Rayon 9080', null, 'normal'],
+    [9090, 'Rayon 9090', null, 'normal'],
+    [9100, 'Rayon 9100', null, 'normal'],
+    [9110, 'Rayon 9110', null, 'normal'],
+    [9120, 'Rayon 9120', null, 'normal'],
+    [9130, 'Rayon 9130', null, 'normal'],
+    [9140, 'Rayon 9140', null, 'normal'],
+    [9150, 'Rayon 9150', null, 'normal'],
+    [9160, 'Rayon 9160', null, 'normal'],
+    [9170, 'Rayon 9170', null, 'normal'],
+    [9180, 'Rayon 9180', null, 'normal'],
+    [9200, 'Rayon 9200', null, 'normal'],
+    [9210, 'Rayon 9210', null, 'normal'],
+    [9220, 'Rayon 9220', null, 'normal'],
+    [9230, 'Rayon 9230', null, 'normal'],
+    [9240, 'Rayon 9240', null, 'normal'],
+    [9250, 'Rayon 9250', null, 'normal'],
+    [9260, 'Rayon 9260', null, 'normal'],
   ];
 
   for (const [nummer, bezeichnung, gebiet, prio] of rayonData) {
     try {
       db.prepare('INSERT OR IGNORE INTO rayone (nummer, bezeichnung, gebiet, priorität) VALUES (?, ?, ?, ?)').run(nummer, bezeichnung, gebiet, prio);
     } catch(e) { console.error('Rayon seed Fehler:', nummer, e.message); }
+  }
+
+  // Fahrzeuge aus Fahrzeugstand
+  // [kennzeichen, marke, antrieb, typ, status]
+  const fahrzeugData = [
+    // Peugeot (Diesel, Zustellfahrzeug)
+    ['PT 10824', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 92132', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11192', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11194', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11195', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11196', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11218', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11219', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11220', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11221', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 10945', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 13876', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 92052', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 92060', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 92218', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 11947', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 13971', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 14049', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 14022', 'Peugeot', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    // Renault (Diesel, Zustellfahrzeug)
+    ['PT 11581', 'Renault', 'Diesel', 'Zustellfahrzeug', 'verfügbar'],
+    // Fiat (außer Betrieb - durchgestrichen)
+    ['PT 10491', 'Fiat', 'Diesel', 'Zustellfahrzeug', 'ausser_betrieb'],
+    // Mercedes-Benz (Elektro, Grosspaketfahrzeug)
+    ['PT 92494', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92470', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92660', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92661', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92766', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92659', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 93021', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 93020', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 92955', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 93022', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 93023', 'Mercedes', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    // Maxus (Elektro, Zustellfahrzeug)
+    ['PT 16282', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16284', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16288', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16287', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16289', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16296', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16293', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16291', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16285', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16290', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16880', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16892', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16884', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16882', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16876', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16878', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16887', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16888', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16817', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16883', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16881', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    ['PT 16821', 'Maxus', 'Elektro', 'Zustellfahrzeug', 'verfügbar'],
+    // Jumug (Elektro, Grosspaketfahrzeug)
+    ['PT 104158', 'Jumug', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+    ['PT 104160', 'Jumug', 'Elektro', 'Grosspaketfahrzeug', 'verfügbar'],
+  ];
+
+  for (const [kennzeichen, marke, antrieb, typ, status] of fahrzeugData) {
+    try {
+      db.prepare(`INSERT OR IGNORE INTO fahrzeuge (kennzeichen, marke, antrieb, typ, status) VALUES (?, ?, ?, ?, ?)`)
+        .run(kennzeichen, marke, antrieb, typ, status);
+    } catch(e) { console.error('Fahrzeug seed Fehler:', kennzeichen, e.message); }
   }
 
   // Standard-Admin anlegen falls noch keiner existiert

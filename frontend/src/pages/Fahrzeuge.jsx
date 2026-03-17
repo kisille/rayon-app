@@ -11,6 +11,8 @@ import {
   BoltIcon,
   FireIcon,
   MagnifyingGlassIcon,
+  ExclamationTriangleIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
@@ -23,10 +25,41 @@ const STATUS_OPTIONEN = [
 ];
 
 const MARKEN = [
-  { value: 'Maxus', antrieb: 'Elektro', typ: 'Zustellfahrzeug' },
-  { value: 'Peugeot', antrieb: 'Diesel', typ: 'Zustellfahrzeug' },
+  { value: 'Maxus',   antrieb: 'Elektro', typ: 'Zustellfahrzeug' },
+  { value: 'Peugeot', antrieb: 'Diesel',  typ: 'Zustellfahrzeug' },
   { value: 'Mercedes', antrieb: 'Elektro', typ: 'Grosspaketfahrzeug' },
+  { value: 'Renault', antrieb: 'Diesel',  typ: 'Zustellfahrzeug' },
+  { value: 'Fiat',    antrieb: 'Diesel',  typ: 'Zustellfahrzeug' },
+  { value: 'Jumug',   antrieb: 'Elektro', typ: 'Grosspaketfahrzeug' },
 ];
+
+// §57a: nächste Vorführung = letzte + 1 Jahr
+// Ampel: rot = überfällig, gelb = <90 Tage, grün = ok, grau = kein Datum
+function pickerl57a(letzteVorführung) {
+  if (!letzteVorführung) return null;
+  const letzte = new Date(letzteVorführung);
+  const nächste = new Date(letzte);
+  nächste.setFullYear(nächste.getFullYear() + 1);
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const diffMs = nächste - heute;
+  const diffTage = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffTage < 0) {
+    return { label: `Überfällig (${Math.abs(diffTage)} Tage)`, farbe: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-500', nächste };
+  } else if (diffTage <= 90) {
+    return { label: `Fällig in ${diffTage} Tagen`, farbe: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500', nächste };
+  } else {
+    const monate = Math.floor(diffTage / 30);
+    return { label: `OK (noch ${monate} Mon.)`, farbe: 'bg-green-100 text-green-700 border-green-200', dot: 'bg-green-500', nächste };
+  }
+}
+
+function formatDatum(isoStr) {
+  if (!isoStr) return '—';
+  const d = new Date(isoStr);
+  return d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 function statusInfo(status) {
   return STATUS_OPTIONEN.find(s => s.value === status) || STATUS_OPTIONEN[0];
@@ -49,6 +82,19 @@ function antriebBadge(antrieb) {
   );
 }
 
+const LEERES_FORMULAR = {
+  kennzeichen: '',
+  marke: 'Maxus',
+  modell: '',
+  antrieb: 'Elektro',
+  typ: 'Zustellfahrzeug',
+  status: 'verfügbar',
+  mitarbeiter_id: '',
+  bemerkung: '',
+  erstzulassung: '',
+  letzte_vorführung: '',
+};
+
 export default function Fahrzeuge() {
   const location = useLocation();
   const editIdFromState = location.state?.editId;
@@ -61,16 +107,7 @@ export default function Fahrzeuge() {
   const [bearbeiten, setBearbeiten] = useState(null);
   const [filter, setFilter] = useState({ marke: '', status: '' });
   const [kennzeichenSuche, setKennzeichenSuche] = useState('');
-  const [formular, setFormular] = useState({
-    kennzeichen: '',
-    marke: 'Maxus',
-    modell: '',
-    antrieb: 'Elektro',
-    typ: 'Zustellfahrzeug',
-    status: 'verfügbar',
-    mitarbeiter_id: '',
-    bemerkung: '',
-  });
+  const [formular, setFormular] = useState(LEERES_FORMULAR);
 
   const ladeFahrzeuge = () => {
     const params = new URLSearchParams();
@@ -87,7 +124,6 @@ export default function Fahrzeuge() {
     api.get('/mitarbeiter').then(({ data }) => setMitarbeiterListe(data));
   }, [filter]);
 
-  // Wenn per Navigation ein Fahrzeug-Edit angefordert wurde
   useEffect(() => {
     if (!editIdFromState || editInitialized.current || laden) return;
     const f = fahrzeuge.find(fz => fz.id === editIdFromState);
@@ -99,16 +135,7 @@ export default function Fahrzeuge() {
 
   const öffneNeu = () => {
     setBearbeiten(null);
-    setFormular({
-      kennzeichen: '',
-      marke: 'Maxus',
-      modell: '',
-      antrieb: 'Elektro',
-      typ: 'Zustellfahrzeug',
-      status: 'verfügbar',
-      mitarbeiter_id: '',
-      bemerkung: '',
-    });
+    setFormular(LEERES_FORMULAR);
     setModalOffen(true);
   };
 
@@ -123,6 +150,8 @@ export default function Fahrzeuge() {
       status: f.status,
       mitarbeiter_id: f.mitarbeiter_id || '',
       bemerkung: f.bemerkung || '',
+      erstzulassung: f.erstzulassung || '',
+      letzte_vorführung: f.letzte_vorführung || '',
     });
     setModalOffen(true);
   };
@@ -139,10 +168,15 @@ export default function Fahrzeuge() {
 
   const speichern = async (e) => {
     e.preventDefault();
+    const payload = {
+      ...formular,
+      erstzulassung: formular.erstzulassung || null,
+      letzte_vorführung: formular.letzte_vorführung || null,
+    };
     if (bearbeiten) {
-      await api.put(`/fahrzeuge/${bearbeiten.id}`, formular);
+      await api.put(`/fahrzeuge/${bearbeiten.id}`, payload);
     } else {
-      await api.post('/fahrzeuge', formular);
+      await api.post('/fahrzeuge', payload);
     }
     setModalOffen(false);
     ladeFahrzeuge();
@@ -161,7 +195,6 @@ export default function Fahrzeuge() {
     ladeFahrzeuge();
   };
 
-  // Zusammenfassung
   const zusammenfassung = {
     gesamt: fahrzeuge.length,
     verfügbar: fahrzeuge.filter(f => f.status === 'verfügbar').length,
@@ -169,6 +202,12 @@ export default function Fahrzeuge() {
     werkstatt: fahrzeuge.filter(f => f.status === 'werkstatt').length,
     ausser_betrieb: fahrzeuge.filter(f => f.status === 'ausser_betrieb').length,
   };
+
+  // §57a Warnungen
+  const pickerlWarnungen = fahrzeuge.filter(f => {
+    const p = pickerl57a(f.letzte_vorführung);
+    return p && (p.dot === 'bg-red-500' || p.dot === 'bg-yellow-500');
+  }).length;
 
   if (laden) {
     return (
@@ -178,13 +217,25 @@ export default function Fahrzeuge() {
     );
   }
 
+  const gefilterteFahrzeuge = fahrzeuge.filter(f =>
+    !kennzeichenSuche || f.kennzeichen.toLowerCase().includes(kennzeichenSuche.toLowerCase())
+  );
+
   return (
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Einsatzfahrzeuge</h1>
-          <p className="text-gray-500 mt-1">{zusammenfassung.gesamt} Fahrzeuge registriert</p>
+          <p className="text-gray-500 mt-1">
+            {zusammenfassung.gesamt} Fahrzeuge registriert
+            {pickerlWarnungen > 0 && (
+              <span className="ml-2 inline-flex items-center gap-1 text-amber-600 font-medium">
+                <ExclamationTriangleIcon className="w-4 h-4" />
+                {pickerlWarnungen} §57a fällig
+              </span>
+            )}
+          </p>
         </div>
         <button onClick={öffneNeu} className="btn-primary flex items-center gap-2">
           <PlusIcon className="w-5 h-5" />
@@ -241,7 +292,7 @@ export default function Fahrzeuge() {
       </div>
 
       {/* Filter nach Marke */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4">
         <button
           onClick={() => setFilter(f => ({ ...f, marke: '' }))}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
@@ -264,7 +315,7 @@ export default function Fahrzeuge() {
       </div>
 
       {/* Fahrzeug-Liste */}
-      {(() => { const gefilterteFahrzeuge = fahrzeuge.filter(f => !kennzeichenSuche || f.kennzeichen.toLowerCase().includes(kennzeichenSuche.toLowerCase())); return gefilterteFahrzeuge; })().length === 0 && fahrzeuge.length > 0 ? (
+      {gefilterteFahrzeuge.length === 0 && fahrzeuge.length > 0 ? (
         <div className="card text-center py-12 text-gray-400">
           <MagnifyingGlassIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p className="text-lg">Kein Fahrzeug mit diesem Kennzeichen gefunden</p>
@@ -281,8 +332,9 @@ export default function Fahrzeuge() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {fahrzeuge.filter(f => !kennzeichenSuche || f.kennzeichen.toLowerCase().includes(kennzeichenSuche.toLowerCase())).map(f => {
+          {gefilterteFahrzeuge.map(f => {
             const si = statusInfo(f.status);
+            const pickerl = pickerl57a(f.letzte_vorführung);
             return (
               <div key={f.id} className="card hover:shadow-md transition-shadow">
                 {/* Kopfzeile */}
@@ -309,7 +361,7 @@ export default function Fahrzeuge() {
                   </div>
                 </div>
 
-                {/* Infos */}
+                {/* Antrieb + Mitarbeiter */}
                 <div className="flex items-center gap-2 mb-3">
                   {antriebBadge(f.antrieb)}
                   {f.mitarbeiter_name && (
@@ -318,6 +370,30 @@ export default function Fahrzeuge() {
                     </span>
                   )}
                 </div>
+
+                {/* §57a Pickerl */}
+                {pickerl && (
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border mb-3 ${pickerl.farbe}`}>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pickerl.dot}`}></span>
+                    <span>§57a: {pickerl.label}</span>
+                    <span className="ml-auto text-xs opacity-75">
+                      bis {formatDatum(pickerl.nächste.toISOString())}
+                    </span>
+                  </div>
+                )}
+                {!f.letzte_vorführung && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-gray-50 text-gray-400 border-gray-200 mb-3">
+                    <CalendarDaysIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>§57a Datum nicht eingetragen</span>
+                  </div>
+                )}
+
+                {/* Erstzulassung */}
+                {f.erstzulassung && (
+                  <div className="text-xs text-gray-400 mb-2">
+                    Erstzulassung: <span className="text-gray-600">{formatDatum(f.erstzulassung)}</span>
+                  </div>
+                )}
 
                 {/* Status */}
                 <div className="flex items-center justify-between">
@@ -356,7 +432,7 @@ export default function Fahrzeuge() {
       {/* Modal */}
       {modalOffen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900">
                 {bearbeiten ? 'Fahrzeug bearbeiten' : 'Neues Fahrzeug'}
@@ -405,16 +481,13 @@ export default function Fahrzeuge() {
               </div>
 
               <div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Antrieb</label>
-                  <input
-                    type="text"
-                    value={formular.antrieb}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                </div>
-  
+                <label className="block text-sm font-medium text-gray-700 mb-1">Antrieb</label>
+                <input
+                  type="text"
+                  value={formular.antrieb}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 text-gray-500"
+                />
               </div>
 
               <div>
@@ -428,6 +501,40 @@ export default function Fahrzeuge() {
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Daten */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-sm font-medium text-gray-700 mb-3">Zulassung & Pickerl</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Erstzulassung</label>
+                    <input
+                      type="date"
+                      value={formular.erstzulassung}
+                      onChange={e => setFormular(f => ({ ...f, erstzulassung: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Letzte §57a Vorführung</label>
+                    <input
+                      type="date"
+                      value={formular.letzte_vorführung}
+                      onChange={e => setFormular(f => ({ ...f, letzte_vorführung: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm"
+                    />
+                  </div>
+                </div>
+                {formular.letzte_vorführung && (() => {
+                  const p = pickerl57a(formular.letzte_vorführung);
+                  return p ? (
+                    <div className={`mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border ${p.farbe}`}>
+                      <span className={`w-2 h-2 rounded-full ${p.dot}`}></span>
+                      Nächste §57a: {formatDatum(p.nächste.toISOString())} — {p.label}
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               <div>

@@ -303,14 +303,14 @@ function ZuweisungsModal({ rayonId, monat, onClose, onSaved }) {
               value={suche}
               onChange={e => setSuche(e.target.value)}
               autoFocus
-              autoComplete="off"
+              autoComplete="new-password"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
               data-lpignore="true"
               data-form-type="other"
               readOnly
-              onFocus={e => e.target.removeAttribute('readonly')}
+              onFocus={e => { e.target.readOnly = false; }}
             />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
@@ -414,9 +414,9 @@ function KompetenzHinzufuegenModal({ rayonId, level, vorhandene, onClose, onSave
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input type="text" className="input pl-9 text-sm" placeholder="Name oder Personalnummer suchen..."
               value={suche} onChange={e => setSuche(e.target.value)} autoFocus
-              autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              autoComplete="new-password" autoCorrect="off" autoCapitalize="off" spellCheck={false}
               data-lpignore="true" data-form-type="other"
-              readOnly onFocus={e => e.target.removeAttribute('readonly')} />
+              readOnly onFocus={e => { e.target.readOnly = false; }} />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
             {gefiltert.map(m => (

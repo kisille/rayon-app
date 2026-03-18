@@ -102,7 +102,9 @@ export default function Rayone() {
           placeholder="Nummer, Bezeichnung oder Gebiet suchen..."
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
-          autoComplete="off"
+          autoComplete="new-password"
+          readOnly
+          onFocus={e => { e.target.readOnly = false; }}
         />
       </div>
 

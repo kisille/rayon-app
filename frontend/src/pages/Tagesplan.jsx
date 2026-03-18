@@ -433,7 +433,14 @@ function RayonZuweisungModal({ eintrag, datum, mitarbeiter, plan, onClose, onSav
                 value={vollSuche}
                 onChange={(e) => setVollSuche(e.target.value)}
                 autoFocus
-                autoComplete="off"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                readOnly
+                onFocus={e => { e.target.readOnly = false; }}
               />
             </div>
             <div className="border border-gray-200 rounded-lg overflow-hidden max-h-44 overflow-y-auto">
@@ -515,7 +522,14 @@ function RayonZuweisungModal({ eintrag, datum, mitarbeiter, plan, onClose, onSav
                   placeholder="Teilmitnahme hinzufügen..."
                   value={teilSuche}
                   onChange={(e) => { setTeilSuche(e.target.value); setTeilAuswahl(''); }}
-                  autoComplete="off"
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-form-type="other"
+                  readOnly
+                  onFocus={e => { e.target.readOnly = false; }}
                 />
               </div>
             </div>

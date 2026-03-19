@@ -2,8 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { getDb } = require('./database');
 const { berechneMitnahmeplan } = require('./mitnahmeplaner');
 
@@ -45,9 +47,34 @@ setInterval(() => {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'rayon-app-geheimnis-2024';
 
-app.use(cors());
+// ─── JWT Secret ───────────────────────────────────────────────────────────────
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  JWT_SECRET = crypto.randomBytes(64).toString('hex');
+  console.warn('[SICHERHEIT] JWT_SECRET ist nicht gesetzt! Ein zufälliger Schlüssel wird verwendet.');
+  console.warn('[SICHERHEIT] Setze JWT_SECRET als Umgebungsvariable, damit Logins nach einem Neustart gültig bleiben.');
+}
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+const erlaubteOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || erlaubteOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: Herkunft ${origin} nicht erlaubt`));
+  }
+}));
+
+// ─── Rate-Limiting ────────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 Minuten
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { fehler: 'Zu viele Anmeldeversuche. Bitte warte 15 Minuten.' }
+});
+
 app.use(express.json());
 
 // ─── Audit-Log Helper ─────────────────────────────────────────────────────────
@@ -109,8 +136,13 @@ function getAktuellerRayon(db, mitarbeiterId, monat) {
   return null;
 }
 
+// ─── Health Check ─────────────────────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { benutzername, passwort } = req.body;
   const db = getDb();
   const benutzer = db.prepare('SELECT * FROM benutzer WHERE benutzername = ?').get(benutzername);
@@ -527,7 +559,8 @@ app.post('/api/monatszuteilungen', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -595,7 +628,8 @@ app.put('/api/monatszuteilungen/:monat/rayon/:rayonId', authMiddleware, (req, re
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -643,7 +677,8 @@ app.post('/api/abwesenheiten', authMiddleware, (req, res) => {
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
-      return res.status(500).json({ fehler: err.message });
+      console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
     }
   } else {
     db.prepare(`
@@ -916,7 +951,8 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -966,7 +1002,8 @@ app.post('/api/tagesplan/wochenbesetzung', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -1043,7 +1080,8 @@ app.post('/api/dienstplan/import', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
 
   res.json({ erfolg: true, importiert, fehler: errors });
@@ -1243,6 +1281,34 @@ app.get('/api/backup/status', authMiddleware, adminOnly, (req, res) => {
   res.json({ backups });
 });
 
+// ─── DSGVO / DSG (Österreich) ─────────────────────────────────────────────────
+// Art. 15 DSGVO: Recht auf Auskunft / Datenportabilität
+// Exportiert alle personenbezogenen Daten eines Mitarbeiters als JSON
+app.get('/api/dsgvo/export/:mitarbeiterId', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.mitarbeiterId);
+  if (!id || isNaN(id)) return res.status(400).json({ fehler: 'Ungültige Mitarbeiter-ID' });
+
+  const mitarbeiter = db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(id);
+  if (!mitarbeiter) return res.status(404).json({ fehler: 'Mitarbeiter nicht gefunden' });
+
+  const monatszuteilungen = db.prepare('SELECT * FROM monatszuteilungen WHERE mitarbeiter_id = ?').all(id);
+  const abwesenheiten = db.prepare('SELECT * FROM abwesenheiten WHERE mitarbeiter_id = ?').all(id);
+  const kompetenzen = db.prepare('SELECT k.*, r.nummer, r.bezeichnung FROM kompetenzen k JOIN rayone r ON k.rayon_id = r.id WHERE k.mitarbeiter_id = ?').all(id);
+  const vertretungen = db.prepare('SELECT * FROM vertretungseinsätze WHERE mitarbeiter_id = ?').all(id);
+
+  res.setHeader('Content-Disposition', `attachment; filename="dsgvo-export-mitarbeiter-${id}.json"`);
+  res.json({
+    exportDatum: new Date().toISOString(),
+    hinweis: 'Datenexport gemäß Art. 15 DSGVO / § 1 DSG (Österreich)',
+    mitarbeiter,
+    monatszuteilungen,
+    abwesenheiten,
+    kompetenzen,
+    vertretungseinsaetze: vertretungen,
+  });
+});
+
 // ─── Frontend-Serving (für Electron / Standalone) ────────────────────────────
 const frontendDist = process.env.FRONTEND_DIST;
 if (frontendDist && fs.existsSync(frontendDist)) {
@@ -1255,7 +1321,6 @@ if (frontendDist && fs.existsSync(frontendDist)) {
 // ─── Server starten ───────────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
   console.log(`Rayon-App Backend läuft auf Port ${PORT}`);
-  console.log(`Login: admin / admin123`);
   getDb();
 });
 

@@ -1,0 +1,22 @@
+services:
+  rayon-app:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      # Pflichtfeld: Langen zufälligen Schlüssel setzen!
+      # Generieren: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET muss gesetzt sein}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      DB_PATH: /data/rayon.db
+      PORT: 3001
+      # Optional: Initiales Admin-Passwort (nur beim ersten Start)
+      # ADMIN_PASSWORT: ${ADMIN_PASSWORT}
+    volumes:
+      # Datenbankdatei und Backups außerhalb des Containers speichern
+      - rayon-daten:/data
+    restart: unless-stopped
+
+volumes:
+  rayon-daten:
+    driver: local

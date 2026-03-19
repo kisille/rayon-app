@@ -452,10 +452,17 @@ function seedInitialData() {
 
   // Standard-Admin anlegen falls noch keiner existiert
   const bcrypt = require('bcryptjs');
+  const crypto = require('crypto');
   const adminCount = db.prepare('SELECT COUNT(*) as count FROM benutzer').get();
   if (Number(adminCount.count) === 0) {
-    const hash = bcrypt.hashSync('admin123', 10);
+    const initialPasswort = process.env.ADMIN_PASSWORT || crypto.randomBytes(12).toString('base64url');
+    const hash = bcrypt.hashSync(initialPasswort, 10);
     db.prepare('INSERT INTO benutzer (benutzername, passwort_hash, name) VALUES (?, ?, ?)').run('admin', hash, 'Administrator');
+    console.log(`[Setup] Admin-Benutzer angelegt. Benutzername: admin`);
+    if (!process.env.ADMIN_PASSWORT) {
+      console.log(`[Setup] Initiales Passwort (einmalig): ${initialPasswort}`);
+      console.log(`[Setup] Bitte sofort nach dem ersten Login ändern!`);
+    }
   }
 }
 

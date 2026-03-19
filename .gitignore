@@ -3,3 +3,5 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+.env
+backend/backups/

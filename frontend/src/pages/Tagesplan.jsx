@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   PrinterIcon, Cog6ToothIcon, CheckIcon, XMarkIcon,
-  MagnifyingGlassIcon, PencilSquareIcon, UserIcon,
+  MagnifyingGlassIcon, PencilSquareIcon, UserIcon, CalendarIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { formatDatumLang, heuteDatum, statusLabel } from '../utils/helpers.js';
@@ -99,12 +99,21 @@ export default function Tagesplan() {
             <Cog6ToothIcon className="w-4 h-4" />
             Monat einrichten
           </button>
+          <a
+            href={`/api/tagesplan/${monat}/ical`}
+            download={`tagesplan-${monat}.ics`}
+            className="btn-secondary flex items-center gap-2"
+            title="Monatsplan als iCal-Datei herunterladen (Outlook / Google Calendar)"
+          >
+            <CalendarIcon className="w-4 h-4" />
+            iCal Export
+          </a>
           <button
             onClick={() => window.print()}
             className="btn-secondary flex items-center gap-2"
           >
             <PrinterIcon className="w-4 h-4" />
-            Drucken
+            Drucken / PDF
           </button>
         </div>
       </div>

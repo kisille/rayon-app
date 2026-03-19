@@ -13,6 +13,8 @@ import {
   XMarkIcon,
   ArrowRightOnRectangleIcon,
   ArrowUpTrayIcon,
+  ShieldCheckIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -26,10 +28,16 @@ const navigation = [
   { name: 'Dienstplan-Import', href: '/dienstplan-import', icon: ArrowUpTrayIcon },
 ];
 
+const adminNavigation = [
+  { name: 'Benutzerverwaltung', href: '/benutzer', icon: ShieldCheckIcon },
+  { name: 'Audit-Log', href: '/audit-log', icon: ClipboardDocumentListIcon },
+];
+
 export default function Layout() {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const istAdmin = auth?.benutzer?.rolle === 'admin';
 
   const handleLogout = () => {
     logout();
@@ -69,6 +77,32 @@ export default function Layout() {
             {item.name}
           </NavLink>
         ))}
+
+        {/* Admin-only Navigation */}
+        {istAdmin && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+              <div className="text-yellow-400/60 text-xs font-semibold uppercase tracking-wide">Administration</div>
+            </div>
+            {adminNavigation.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                    isActive
+                      ? 'bg-yellow-400 text-gray-900'
+                      : 'text-yellow-100 hover:bg-yellow-700 hover:text-white'
+                  }`
+                }
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                {item.name}
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
       {/* Benutzer-Info */}
@@ -79,7 +113,9 @@ export default function Layout() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate">{auth?.benutzer?.name}</div>
-            <div className="text-yellow-300 text-xs">Standortleiter</div>
+            <div className="text-yellow-300 text-xs">
+              {auth?.benutzer?.rolle === 'admin' ? 'Administrator' : 'Schichtleiter'}
+            </div>
           </div>
         </div>
         <button

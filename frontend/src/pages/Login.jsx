@@ -16,7 +16,7 @@ export default function Login() {
     setLaden(true);
     try {
       const { data } = await api.post('/auth/login', form);
-      login(data.token, { name: data.name, benutzername: form.benutzername });
+      login(data.token, { name: data.name, benutzername: form.benutzername, rolle: data.rolle || 'admin' });
       navigate('/');
     } catch (err) {
       if (!err.response) {

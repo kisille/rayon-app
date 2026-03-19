@@ -12,6 +12,8 @@ import Mitnahmeplanung from './pages/Mitnahmeplanung.jsx';
 import Statistik from './pages/Statistik.jsx';
 import Fahrzeuge from './pages/Fahrzeuge.jsx';
 import DienstplanImport from './pages/DienstplanImport.jsx';
+import Benutzer from './pages/Benutzer.jsx';
+import AuditLog from './pages/AuditLog.jsx';
 
 // Auth-Kontext
 export const AuthContext = createContext(null);
@@ -67,6 +69,9 @@ function App() {
             <Route path="statistik" element={<Statistik />} />
             <Route path="fahrzeuge" element={<Fahrzeuge />} />
             <Route path="dienstplan-import" element={<DienstplanImport />} />
+            {/* Admin-only Seiten */}
+            <Route path="benutzer" element={auth?.benutzer?.rolle === 'admin' ? <Benutzer /> : <Navigate to="/" />} />
+            <Route path="audit-log" element={auth?.benutzer?.rolle === 'admin' ? <AuditLog /> : <Navigate to="/" />} />
             {/* Legacy-Redirect */}
             <Route path="vertretung" element={<Navigate to="/mitnahme" replace />} />
           </Route>

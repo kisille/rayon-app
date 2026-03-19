@@ -7,6 +7,42 @@ const fs = require('fs');
 const { getDb } = require('./database');
 const { berechneMitnahmeplan } = require('./mitnahmeplaner');
 
+// ─── Auto-Backup ──────────────────────────────────────────────────────────────
+function erstelleBackup() {
+  const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'rayon.db');
+  const backupDir = path.join(__dirname, 'backups');
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+  const datum = new Date().toISOString().split('T')[0];
+  const zielPfad = path.join(backupDir, `rayon.db.backup.${datum}`);
+
+  if (!fs.existsSync(zielPfad)) {
+    try {
+      fs.copyFileSync(DB_PATH, zielPfad);
+      console.log(`[Backup] Erstellt: ${zielPfad}`);
+    } catch (e) {
+      console.error('[Backup] Fehler:', e.message);
+    }
+  }
+
+  // Alte Backups löschen (nur letzte 7 behalten)
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => f.startsWith('rayon.db.backup.'))
+    .sort()
+    .reverse();
+  for (const alt of backups.slice(7)) {
+    fs.unlinkSync(path.join(backupDir, alt));
+    console.log(`[Backup] Alt gelöscht: ${alt}`);
+  }
+}
+
+// Backup beim Start + täglich um 02:00 Uhr
+setTimeout(erstelleBackup, 5000);
+setInterval(() => {
+  const jetzt = new Date();
+  if (jetzt.getHours() === 2 && jetzt.getMinutes() === 0) erstelleBackup();
+}, 60 * 1000);
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'rayon-app-geheimnis-2024';
@@ -14,16 +50,41 @@ const JWT_SECRET = process.env.JWT_SECRET || 'rayon-app-geheimnis-2024';
 app.use(cors());
 app.use(express.json());
 
+// ─── Audit-Log Helper ─────────────────────────────────────────────────────────
+function schreibeAuditLog(req) {
+  const AUDIT_METHODEN = ['POST', 'PUT', 'DELETE', 'PATCH'];
+  if (!AUDIT_METHODEN.includes(req.method)) return;
+  const body = { ...req.body };
+  if (body.passwort) body.passwort = '[VERBORGEN]';
+  if (body.passwort_hash) body.passwort_hash = '[VERBORGEN]';
+  try {
+    getDb().prepare(`
+      INSERT INTO audit_log (benutzer_id, benutzername, methode, pfad, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.benutzer?.id || null, req.benutzer?.benutzername || 'unbekannt', req.method, req.path, JSON.stringify(body));
+  } catch (e) {
+    console.error('[AuditLog] Fehler:', e.message);
+  }
+}
+
 // ─── Middleware: JWT Auth ─────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ fehler: 'Nicht authentifiziert' });
   try {
     req.benutzer = jwt.verify(token, JWT_SECRET);
+    schreibeAuditLog(req);
     next();
   } catch {
     return res.status(401).json({ fehler: 'Token ungültig' });
   }
+}
+
+function adminOnly(req, res, next) {
+  if (req.benutzer?.rolle !== 'admin') {
+    return res.status(403).json({ fehler: 'Nur Administratoren haben Zugriff' });
+  }
+  next();
 }
 
 // Hilfsfunktion: aktuellen Rayon eines Mitarbeiters für einen Monat ermitteln
@@ -59,12 +120,12 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: benutzer.id, benutzername: benutzer.benutzername, name: benutzer.name },
+    { id: benutzer.id, benutzername: benutzer.benutzername, name: benutzer.name, rolle: benutzer.rolle || 'admin' },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
 
-  res.json({ token, name: benutzer.name });
+  res.json({ token, name: benutzer.name, rolle: benutzer.rolle || 'admin' });
 });
 
 // ─── Rayone ───────────────────────────────────────────────────────────────────
@@ -1053,6 +1114,133 @@ app.get('/api/dashboard', authMiddleware, (req, res) => {
     anzahl_fahrzeuge: anzahlFahrzeuge.count,
     fahrzeug_status: fahrzeugStatus,
   });
+});
+
+// ─── Benutzerverwaltung (nur Admin) ──────────────────────────────────────────
+app.get('/api/benutzer', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const benutzer = db.prepare('SELECT id, benutzername, name, rolle, erstellt_am FROM benutzer ORDER BY name').all();
+  res.json(benutzer);
+});
+
+app.post('/api/benutzer', authMiddleware, adminOnly, (req, res) => {
+  const { benutzername, passwort, name, rolle } = req.body;
+  const db = getDb();
+  if (!benutzername || !passwort || !name) {
+    return res.status(400).json({ fehler: 'Benutzername, Passwort und Name erforderlich' });
+  }
+  const existiert = db.prepare('SELECT id FROM benutzer WHERE benutzername = ?').get(benutzername);
+  if (existiert) return res.status(409).json({ fehler: 'Benutzername bereits vergeben' });
+
+  const hash = bcrypt.hashSync(passwort, 10);
+  const result = db.prepare(
+    'INSERT INTO benutzer (benutzername, passwort_hash, name, rolle) VALUES (?, ?, ?, ?)'
+  ).run(benutzername, hash, name, rolle || 'schichtleiter');
+  res.json({ id: Number(result.lastInsertRowid), erfolg: true });
+});
+
+app.put('/api/benutzer/:id', authMiddleware, adminOnly, (req, res) => {
+  const { name, rolle, passwort } = req.body;
+  const db = getDb();
+  if (passwort) {
+    const hash = bcrypt.hashSync(passwort, 10);
+    db.prepare('UPDATE benutzer SET name = ?, rolle = ?, passwort_hash = ? WHERE id = ?')
+      .run(name, rolle, hash, req.params.id);
+  } else {
+    db.prepare('UPDATE benutzer SET name = ?, rolle = ? WHERE id = ?')
+      .run(name, rolle, req.params.id);
+  }
+  res.json({ erfolg: true });
+});
+
+app.delete('/api/benutzer/:id', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  // Letzten Admin nicht löschen
+  const adminCount = db.prepare("SELECT COUNT(*) as c FROM benutzer WHERE rolle = 'admin'").get();
+  const zuLoeschender = db.prepare('SELECT rolle FROM benutzer WHERE id = ?').get(req.params.id);
+  if (zuLoeschender?.rolle === 'admin' && adminCount.c <= 1) {
+    return res.status(400).json({ fehler: 'Der letzte Administrator kann nicht gelöscht werden' });
+  }
+  db.prepare('DELETE FROM benutzer WHERE id = ?').run(req.params.id);
+  res.json({ erfolg: true });
+});
+
+// ─── Audit-Log anzeigen (nur Admin) ──────────────────────────────────────────
+app.get('/api/audit-log', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const { limit = 100, offset = 0 } = req.query;
+  const eintraege = db.prepare(`
+    SELECT * FROM audit_log ORDER BY zeitstempel DESC LIMIT ? OFFSET ?
+  `).all(Number(limit), Number(offset));
+  const gesamt = db.prepare('SELECT COUNT(*) as count FROM audit_log').get();
+  res.json({ eintraege, gesamt: gesamt.count });
+});
+
+// ─── iCal-Export ─────────────────────────────────────────────────────────────
+app.get('/api/tagesplan/:monat/ical', authMiddleware, (req, res) => {
+  const { monat } = req.params;
+  const db = getDb();
+
+  // Alle Tagesplaneinträge für den Monat laden
+  const eintraege = db.prepare(`
+    SELECT t.datum, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung,
+           m.name as mitarbeiter_name, t.ist_vertretung
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+    WHERE t.datum LIKE ? AND t.mitarbeiter_id IS NOT NULL
+    ORDER BY t.datum, r.nummer
+  `).all(`${monat}%`);
+
+  // ICS generieren
+  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  let ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Rayon-Verwaltung//Post//DE',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:Tagesplan ${monat}`,
+    'X-WR-TIMEZONE:Europe/Vienna',
+  ];
+
+  for (const e of eintraege) {
+    const datumKompakt = e.datum.replace(/-/g, '');
+    const uid = `${datumKompakt}-rayon${e.rayon_nummer}@rayon-app`;
+    const zusammenfassung = `R${e.rayon_nummer}: ${e.mitarbeiter_name}${e.ist_vertretung ? ' (Vertretung)' : ''}`;
+
+    ics.push(
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${datumKompakt}`,
+      `DTEND;VALUE=DATE:${datumKompakt}`,
+      `SUMMARY:${zusammenfassung}`,
+      `DESCRIPTION:Rayon ${e.rayon_nummer} – ${e.rayon_bezeichnung}`,
+      'END:VEVENT'
+    );
+  }
+
+  ics.push('END:VCALENDAR');
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="tagesplan-${monat}.ics"`);
+  res.send(ics.join('\r\n'));
+});
+
+// ─── Backup-Status ────────────────────────────────────────────────────────────
+app.get('/api/backup/status', authMiddleware, adminOnly, (req, res) => {
+  const backupDir = path.join(__dirname, 'backups');
+  if (!fs.existsSync(backupDir)) return res.json({ backups: [] });
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => f.startsWith('rayon.db.backup.'))
+    .sort()
+    .reverse()
+    .map(f => {
+      const stats = fs.statSync(path.join(backupDir, f));
+      return { datei: f, groesse_kb: Math.round(stats.size / 1024), erstellt: stats.mtime };
+    });
+  res.json({ backups });
 });
 
 // ─── Frontend-Serving (für Electron / Standalone) ────────────────────────────

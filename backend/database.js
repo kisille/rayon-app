@@ -136,7 +136,19 @@ function initSchema() {
       benutzername TEXT UNIQUE NOT NULL,
       passwort_hash TEXT NOT NULL,
       name TEXT NOT NULL,
+      rolle TEXT NOT NULL DEFAULT 'admin',
       erstellt_am TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Audit-Log: Wer hat wann was geändert
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      zeitstempel TEXT DEFAULT (datetime('now')),
+      benutzer_id INTEGER,
+      benutzername TEXT NOT NULL,
+      methode TEXT NOT NULL,
+      pfad TEXT NOT NULL,
+      details TEXT
     );
   `);
 
@@ -182,6 +194,7 @@ function initSchema() {
   // Migration: neue Spalten für Fahrzeuge (falls Rebuild nicht erfolgt ist)
   try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN erstzulassung TEXT"); } catch {}
   try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN letzte_vorführung TEXT"); } catch {}
+  try { db.exec("ALTER TABLE benutzer ADD COLUMN rolle TEXT NOT NULL DEFAULT 'admin'"); } catch {}
 
   // Migration: UNIQUE(monat, mitarbeiter_id) → UNIQUE(monat, mitarbeiter_id, rayon_id)
   // Ermöglicht 1 Ganzmitnahme + max. 2 Teilmitnahmen pro Mitarbeiter pro Monat

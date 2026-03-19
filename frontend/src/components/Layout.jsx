@@ -6,6 +6,7 @@ import {
   UsersIcon,
   MapIcon,
   CalendarDaysIcon,
+  CalendarIcon,
   ArrowsRightLeftIcon,
   ChartBarIcon,
   TruckIcon,
@@ -20,6 +21,7 @@ import {
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Tagesplan', href: '/tagesplan', icon: CalendarDaysIcon },
+  { name: 'Jahreskalender', href: '/jahreskalender', icon: CalendarIcon },
   { name: 'Mitnahmeplanung', href: '/mitnahme', icon: ArrowsRightLeftIcon },
   { name: 'Mitarbeiter', href: '/mitarbeiter', icon: UsersIcon },
   { name: 'Rayone', href: '/rayone', icon: MapIcon },

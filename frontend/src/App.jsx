@@ -14,6 +14,7 @@ import Fahrzeuge from './pages/Fahrzeuge.jsx';
 import DienstplanImport from './pages/DienstplanImport.jsx';
 import Benutzer from './pages/Benutzer.jsx';
 import AuditLog from './pages/AuditLog.jsx';
+import Jahreskalender from './pages/Jahreskalender.jsx';
 
 // Auth-Kontext
 export const AuthContext = createContext(null);
@@ -69,6 +70,7 @@ function App() {
             <Route path="statistik" element={<Statistik />} />
             <Route path="fahrzeuge" element={<Fahrzeuge />} />
             <Route path="dienstplan-import" element={<DienstplanImport />} />
+            <Route path="jahreskalender" element={<Jahreskalender />} />
             {/* Admin-only Seiten */}
             <Route path="benutzer" element={auth?.benutzer?.rolle === 'admin' ? <Benutzer /> : <Navigate to="/" />} />
             <Route path="audit-log" element={auth?.benutzer?.rolle === 'admin' ? <AuditLog /> : <Navigate to="/" />} />

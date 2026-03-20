@@ -23,12 +23,52 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+// JWT-Ablaufzeit aus Token dekodieren (ohne Signaturprüfung – nur für UI-Logik)
+function getTokenExpiry(token) {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [auth, setAuth] = useState(() => {
     const token = localStorage.getItem('token');
     const benutzer = localStorage.getItem('benutzer');
-    return token ? { token, benutzer: JSON.parse(benutzer) } : null;
+    if (!token) return null;
+    // Token bereits abgelaufen? Direkt ausloggen.
+    const exp = getTokenExpiry(token);
+    if (exp && Date.now() > exp) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('benutzer');
+      return null;
+    }
+    return { token, benutzer: JSON.parse(benutzer) };
   });
+
+  // Automatischer Logout wenn JWT abläuft
+  useEffect(() => {
+    if (!auth?.token) return;
+    const exp = getTokenExpiry(auth.token);
+    if (!exp) return;
+    const verbleibend = exp - Date.now();
+    if (verbleibend <= 0) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('benutzer');
+      setAuth(null);
+      window.location.href = '/login?grund=sitzung-abgelaufen';
+      return;
+    }
+    const timer = setTimeout(() => {
+      localStorage.removeItem('token');
+      localStorage.removeItem('benutzer');
+      setAuth(null);
+      window.location.href = '/login?grund=sitzung-abgelaufen';
+    }, verbleibend);
+    return () => clearTimeout(timer);
+  }, [auth?.token]);
 
   useEffect(() => {
     const disableAutocomplete = (e) => {

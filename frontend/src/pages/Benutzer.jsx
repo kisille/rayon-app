@@ -164,7 +164,7 @@ export default function Benutzer() {
                 </div>
               )}
               <div>
-                <label className="label">{bearbeiten ? 'Neues Passwort (leer = nicht ändern)' : 'Passwort'}</label>
+                <label className="label">{bearbeiten ? 'Neues Passwort (leer = nicht ändern)' : 'Passwort'} <span className="text-gray-400 font-normal">min. 8 Zeichen</span></label>
                 <input
                   type="password"
                   className="input"
@@ -172,8 +172,27 @@ export default function Benutzer() {
                   onChange={e => setForm({ ...form, passwort: e.target.value })}
                   required={!bearbeiten}
                   autoComplete="new-password"
-                  minLength={6}
+                  minLength={8}
                 />
+                {form.passwort.length > 0 && (
+                  <div className="mt-1">
+                    <div className="flex gap-1">
+                      {[...Array(4)].map((_, i) => {
+                        const kriterien = [
+                          form.passwort.length >= 8,
+                          /[A-Z]/.test(form.passwort),
+                          /[0-9]/.test(form.passwort),
+                          /[^A-Za-z0-9]/.test(form.passwort),
+                        ];
+                        const erfüllt = kriterien.filter(Boolean).length;
+                        return (
+                          <div key={i} className={`h-1 flex-1 rounded-full ${i < erfüllt ? (erfüllt <= 1 ? 'bg-red-400' : erfüllt <= 2 ? 'bg-yellow-400' : erfüllt <= 3 ? 'bg-blue-400' : 'bg-green-500') : 'bg-gray-200'}`} />
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Stärker: Großbuchstaben, Zahlen, Sonderzeichen</p>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label">Rolle</label>

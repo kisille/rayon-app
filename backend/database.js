@@ -10,6 +10,8 @@ function getDb() {
     db = new DatabaseSync(DB_PATH);
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA foreign_keys = ON");
+    // WAL-Datei beim Start bereinigen (verhindert aufgeblähte .wal-Datei)
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     initSchema();
   }
   return db;

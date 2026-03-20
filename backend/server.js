@@ -1167,6 +1167,9 @@ app.post('/api/benutzer', authMiddleware, adminOnly, (req, res) => {
   if (!benutzername || !passwort || !name) {
     return res.status(400).json({ fehler: 'Benutzername, Passwort und Name erforderlich' });
   }
+  if (passwort.length < 8) {
+    return res.status(400).json({ fehler: 'Passwort muss mindestens 8 Zeichen lang sein' });
+  }
   const existiert = db.prepare('SELECT id FROM benutzer WHERE benutzername = ?').get(benutzername);
   if (existiert) return res.status(409).json({ fehler: 'Benutzername bereits vergeben' });
 
@@ -1200,6 +1203,25 @@ app.delete('/api/benutzer/:id', authMiddleware, adminOnly, (req, res) => {
     return res.status(400).json({ fehler: 'Der letzte Administrator kann nicht gelöscht werden' });
   }
   db.prepare('DELETE FROM benutzer WHERE id = ?').run(req.params.id);
+  res.json({ erfolg: true });
+});
+
+// ─── Eigenes Passwort ändern (alle Benutzer) ─────────────────────────────────
+app.put('/api/me/passwort', authMiddleware, (req, res) => {
+  const { aktuelles_passwort, neues_passwort } = req.body;
+  if (!aktuelles_passwort || !neues_passwort) {
+    return res.status(400).json({ fehler: 'Aktuelles und neues Passwort sind erforderlich' });
+  }
+  if (neues_passwort.length < 8) {
+    return res.status(400).json({ fehler: 'Neues Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  const db = getDb();
+  const benutzer = db.prepare('SELECT * FROM benutzer WHERE id = ?').get(req.benutzer.id);
+  if (!benutzer || !bcrypt.compareSync(aktuelles_passwort, benutzer.passwort_hash)) {
+    return res.status(401).json({ fehler: 'Aktuelles Passwort ist falsch' });
+  }
+  const hash = bcrypt.hashSync(neues_passwort, 10);
+  db.prepare('UPDATE benutzer SET passwort_hash = ? WHERE id = ?').run(hash, req.benutzer.id);
   res.json({ erfolg: true });
 });
 

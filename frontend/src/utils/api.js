@@ -13,14 +13,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Bei 401 ausloggen
+// Bei 401 ausloggen und Session-Abgelaufen-Hinweis anzeigen
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('benutzer');
-      window.location.href = '/login';
+      // Nur weiterleiten wenn kein Login-Request selbst fehlgeschlagen ist
+      const isLoginRequest = error.config?.url?.includes('/auth/login');
+      if (!isLoginRequest) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('benutzer');
+        window.location.href = '/login?grund=sitzung-abgelaufen';
+      }
     }
     return Promise.reject(error);
   }

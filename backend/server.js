@@ -972,7 +972,7 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
 });
 
 // ─── Tägliche Zuteilungen für Datumsbereich (für DienstplanGrid) ──────────────
-app.get('/api/tagespläne', authMiddleware, (req, res) => {
+app.get('/api/tagesplan-zuteilungen', authMiddleware, (req, res) => {
   const { von, bis } = req.query;
   const db = getDb();
   if (!von || !bis) return res.status(400).json({ fehler: 'von und bis erforderlich' });

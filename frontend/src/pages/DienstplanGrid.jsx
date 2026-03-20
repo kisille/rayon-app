@@ -68,7 +68,7 @@ export default function DienstplanGrid() {
         api.get('/mitarbeiter'),
         api.get(`/abwesenheiten?von=${monat}-01&bis=${monat}-31`),
         api.get(`/monatszuteilungen?monat=${monat}`),
-        api.get(`/tagespläne?von=${monat}-01&bis=${monat}-31`),
+        api.get(`/tagesplan-zuteilungen?von=${monat}-01&bis=${monat}-31`),
       ]);
 
       const maListe = maRes.data.filter(m => m.aktiv !== 0);

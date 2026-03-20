@@ -43,7 +43,6 @@ export default function DienstplanGrid() {
 
   useEffect(() => { ladeDaten(monat); }, [monat, ladeDaten]);
 
-  // Sync horizontal scroll: body drives header
   useEffect(() => {
     const body = bodyScrollRef.current;
     const header = headerScrollRef.current;
@@ -55,11 +54,7 @@ export default function DienstplanGrid() {
 
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-6">
-
-      {/* ── Sticky header ───────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 shadow-sm">
-
-        {/* Title row */}
         <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-2 flex items-center gap-6 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dienstplan-Grid</h1>
@@ -73,7 +68,7 @@ export default function DienstplanGrid() {
               <span className="mx-1 text-gray-300">·</span>
               <span className="text-teal-600 font-semibold">Kur</span>
               <span className="mx-1 text-gray-300">·</span>
-              <span className="text-blue-800 font-semibold">SA1–SA8</span>
+              <span className="text-blue-800 font-semibold">SA1-SA8</span>
             </div>
           </div>
           <div className="ml-auto">
@@ -85,8 +80,6 @@ export default function DienstplanGrid() {
             />
           </div>
         </div>
-
-        {/* Day column headers – scrolls in sync with body */}
         <div className="overflow-x-hidden" ref={headerScrollRef}>
           <table className="border-collapse w-max">
             <thead>
@@ -114,8 +107,6 @@ export default function DienstplanGrid() {
           </table>
         </div>
       </div>
-
-      {/* ── Scrollable body ─────────────────────────────────────── */}
       <div className="overflow-x-auto" ref={bodyScrollRef}>
         <table className="border-collapse w-max">
           <colgroup>
@@ -127,9 +118,7 @@ export default function DienstplanGrid() {
           <tbody>
             {loading && !daten && (
               <tr>
-                <td colSpan={32} className="text-center py-12 text-gray-400">
-                  Laden…
-                </td>
+                <td colSpan={32} className="text-center py-12 text-gray-400">Laden...</td>
               </tr>
             )}
             {daten?.mitarbeiter.map(m => (
@@ -146,7 +135,6 @@ export default function DienstplanGrid() {
                     ? formatRayon(m.rayon_nummer)
                     : null;
                   const klasse = abw ? (STATUS_KLASSE[abw] || 'text-gray-500') : 'text-gray-700';
-
                   return (
                     <td
                       key={t.datum}

@@ -246,7 +246,12 @@ export default function Mitnahmeplanung() {
                   placeholder="Mitarbeiter nach Name oder Nr. suchen..."
                   value={mitarbeiterSuche}
                   onChange={(e) => setMitarbeiterSuche(e.target.value)}
-                  autoComplete="new-password"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  data-1p-ignore="true"
+                  readOnly
+                  onFocus={e => { e.target.readOnly = false; }}
                 />
               </div>
             )}

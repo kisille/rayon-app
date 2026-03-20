@@ -1081,6 +1081,19 @@ app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
     abwesenheitMap[a.mitarbeiter_id][a.datum] = a.status;
   }
 
+  // Tagespläne: tägliche Rayon-Zuweisungen (überschreiben Monatszuteilung)
+  const tagesplaene = db.prepare(`
+    SELECT t.datum, t.mitarbeiter_id, r.nummer as rayon_nummer
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    WHERE t.datum LIKE ? AND t.mitarbeiter_id IS NOT NULL
+  `).all(`${monat}%`);
+  const tagesplanMap = {};
+  for (const t of tagesplaene) {
+    if (!tagesplanMap[t.mitarbeiter_id]) tagesplanMap[t.mitarbeiter_id] = {};
+    tagesplanMap[t.mitarbeiter_id][t.datum] = t.rayon_nummer;
+  }
+
   const [jahr, mon] = monat.split('-').map(Number);
   const tageImMonat = new Date(jahr, mon, 0).getDate();
   const tage = [];
@@ -1098,6 +1111,7 @@ app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
       personalnummer: m.personalnummer,
       rayon_nummer: zuteilungMap[m.id] || null,
       abwesenheiten: abwesenheitMap[m.id] || {},
+      tagesplan: tagesplanMap[m.id] || {},
     })),
   });
 });

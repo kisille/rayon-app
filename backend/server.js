@@ -1051,6 +1051,57 @@ app.post('/api/vertretung/berechnen', authMiddleware, (req, res) => {
   res.redirect(307, '/api/mitnahme/berechnen');
 });
 
+// ─── Dienstplan-Grid ──────────────────────────────────────────────────────────
+app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
+  const { monat } = req.query;
+  if (!monat || !/^\d{4}-\d{2}$/.test(monat)) {
+    return res.status(400).json({ fehler: 'Gültiger Monat erforderlich (YYYY-MM)' });
+  }
+  const db = getDb();
+
+  const mitarbeiter = db.prepare(
+    'SELECT id, name, personalnummer FROM mitarbeiter WHERE aktiv = 1 ORDER BY name'
+  ).all();
+
+  const zuteilungen = db.prepare(`
+    SELECT mz.mitarbeiter_id, r.nummer as rayon_nummer
+    FROM monatszuteilungen mz
+    JOIN rayone r ON mz.rayon_id = r.id
+    WHERE mz.monat = ? AND mz.ist_teilzuteilung = 0
+  `).all(monat);
+  const zuteilungMap = {};
+  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = z.rayon_nummer;
+
+  const abwesenheiten = db.prepare(
+    'SELECT mitarbeiter_id, datum, status FROM abwesenheiten WHERE datum LIKE ?'
+  ).all(`${monat}%`);
+  const abwesenheitMap = {};
+  for (const a of abwesenheiten) {
+    if (!abwesenheitMap[a.mitarbeiter_id]) abwesenheitMap[a.mitarbeiter_id] = {};
+    abwesenheitMap[a.mitarbeiter_id][a.datum] = a.status;
+  }
+
+  const [jahr, mon] = monat.split('-').map(Number);
+  const tageImMonat = new Date(jahr, mon, 0).getDate();
+  const tage = [];
+  for (let d = 1; d <= tageImMonat; d++) {
+    const datum = `${monat}-${String(d).padStart(2, '0')}`;
+    tage.push({ datum, tag: d, wochentag: new Date(datum + 'T00:00:00').getDay() });
+  }
+
+  res.json({
+    monat,
+    tage,
+    mitarbeiter: mitarbeiter.map(m => ({
+      id: m.id,
+      name: m.name,
+      personalnummer: m.personalnummer,
+      rayon_nummer: zuteilungMap[m.id] || null,
+      abwesenheiten: abwesenheitMap[m.id] || {},
+    })),
+  });
+});
+
 // ─── Dienstplan-Import ────────────────────────────────────────────────────────
 app.post('/api/dienstplan/import', authMiddleware, (req, res) => {
   const { monat, eintraege, ersetzen } = req.body;

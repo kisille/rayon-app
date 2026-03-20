@@ -12,6 +12,7 @@ import Mitnahmeplanung from './pages/Mitnahmeplanung.jsx';
 import Statistik from './pages/Statistik.jsx';
 import Fahrzeuge from './pages/Fahrzeuge.jsx';
 import DienstplanImport from './pages/DienstplanImport.jsx';
+import DienstplanGrid from './pages/DienstplanGrid.jsx';
 import Benutzer from './pages/Benutzer.jsx';
 import AuditLog from './pages/AuditLog.jsx';
 import Jahreskalender from './pages/Jahreskalender.jsx';
@@ -70,6 +71,7 @@ function App() {
             <Route path="statistik" element={<Statistik />} />
             <Route path="fahrzeuge" element={<Fahrzeuge />} />
             <Route path="dienstplan-import" element={<DienstplanImport />} />
+            <Route path="dienstplan-grid" element={<DienstplanGrid />} />
             <Route path="jahreskalender" element={<Jahreskalender />} />
             {/* Admin-only Seiten */}
             <Route path="benutzer" element={auth?.benutzer?.rolle === 'admin' ? <Benutzer /> : <Navigate to="/" />} />

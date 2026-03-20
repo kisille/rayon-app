@@ -13,7 +13,6 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  ArrowUpTrayIcon,
   ShieldCheckIcon,
   ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
@@ -27,7 +26,6 @@ const navigation = [
   { name: 'Rayone', href: '/rayone', icon: MapIcon },
   { name: 'Fahrzeuge', href: '/fahrzeuge', icon: TruckIcon },
   { name: 'Statistik', href: '/statistik', icon: ChartBarIcon },
-  { name: 'Dienstplan-Import', href: '/dienstplan-import', icon: ArrowUpTrayIcon },
 ];
 
 const adminNavigation = [

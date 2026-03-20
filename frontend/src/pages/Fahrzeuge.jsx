@@ -15,6 +15,7 @@ import {
   CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 const STATUS_OPTIONEN = [
   { value: 'verfügbar', label: 'Verfügbar', farbe: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
@@ -435,8 +436,8 @@ export default function Fahrzeuge() {
 
       {/* Modal */}
       {modalOffen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setModalOffen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-gray-900">
                 {bearbeiten ? 'Fahrzeug bearbeiten' : 'Neues Fahrzeug'}
@@ -547,16 +548,13 @@ export default function Fahrzeuge() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Zugeteilter Mitarbeiter</label>
-                <select
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm bg-white"
+                <SearchableSelect
+                  options={mitarbeiterListe.map(m => ({ id: m.id, label: m.name, sublabel: `Nr. ${m.personalnummer}` }))}
                   value={formular.mitarbeiter_id || ''}
-                  onChange={e => setFormular(f => ({ ...f, mitarbeiter_id: e.target.value ? parseInt(e.target.value) : null }))}
-                >
-                  <option value="">— Kein Mitarbeiter —</option>
-                  {mitarbeiterListe.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
-                  ))}
-                </select>
+                  onChange={id => setFormular(f => ({ ...f, mitarbeiter_id: id ? parseInt(id) : null }))}
+                  searchPlaceholder="Mitarbeiter suchen..."
+                  emptyLabel="— Kein Mitarbeiter —"
+                />
               </div>
 
               <div>

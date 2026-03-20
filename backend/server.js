@@ -362,9 +362,9 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
       aktueller_rayon_gebiet: ganz?.rayon_gebiet || m.stamm_rayon_gebiet,
       hat_monatszuteilung: !!z,
       teilmitnahmen: z?.teilmitnahmen || [],
-      heute_rayon_id: heute_eintrag?.rayon_id || null,
-      heute_rayon_nummer: heute_eintrag?.rayon_nummer || null,
-      heute_rayon_bezeichnung: heute_eintrag?.rayon_bezeichnung || null,
+      heute_rayon_id: heute_eintrag?.rayon_id || ganz?.rayon_id || null,
+      heute_rayon_nummer: heute_eintrag?.rayon_nummer || ganz?.rayon_nummer || null,
+      heute_rayon_bezeichnung: heute_eintrag?.rayon_bezeichnung || ganz?.rayon_bezeichnung || null,
     };
   });
 

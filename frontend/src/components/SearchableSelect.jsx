@@ -61,16 +61,13 @@ export function SearchableSelect({
                 value={suche}
                 onChange={e => setSuche(e.target.value)}
                 autoFocus
-                autoComplete="new-password"
-                name="searchable-select-no-autofill"
+                autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
                 data-lpignore="true"
                 data-form-type="other"
                 data-1p-ignore="true"
-                readOnly
-                onFocus={e => { e.target.readOnly = false; }}
                 onClick={e => e.stopPropagation()}
               />
             </div>

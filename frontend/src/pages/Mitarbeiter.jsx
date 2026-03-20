@@ -156,14 +156,9 @@ export default function Mitarbeiter() {
                   )}
 
                   {/* Heute besetzter Rayon (aus Tagesplan) */}
-                  {m.heute_rayon_id && m.heute_rayon_id !== m.stamm_rayon_id && (
+                  {m.heute_rayon_id && (
                     <div className="text-xs font-medium text-blue-600 mt-0.5">
                       Heute: {m.heute_rayon_bezeichnung}
-                    </div>
-                  )}
-                  {m.heute_rayon_id && m.heute_rayon_id === m.stamm_rayon_id && (
-                    <div className="text-xs font-medium text-green-600 mt-0.5">
-                      Heute auf Stammrayon
                     </div>
                   )}
 

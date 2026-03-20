@@ -5,3 +5,7 @@ dist/
 *.db-wal
 .env
 backend/backups/
+# TLS-Zertifikate niemals ins Repo committen
+certs/*.pem
+certs/*.key
+certs/*.crt

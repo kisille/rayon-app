@@ -137,8 +137,22 @@ function getAktuellerRayon(db, mitarbeiterId, monat) {
 }
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
+const startZeit = Date.now();
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  let dbStatus = 'ok';
+  try {
+    getDb().prepare('SELECT 1').get();
+  } catch {
+    dbStatus = 'fehler';
+  }
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    version: '1.0',
+    uptime_s: Math.floor((Date.now() - startZeit) / 1000),
+    db: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ─── Auth Routes ──────────────────────────────────────────────────────────────

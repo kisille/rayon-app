@@ -971,6 +971,22 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
   res.json({ erfolg: true });
 });
 
+// ─── Tägliche Zuteilungen für Datumsbereich (für DienstplanGrid) ──────────────
+app.get('/api/tagespläne', authMiddleware, (req, res) => {
+  const { von, bis } = req.query;
+  const db = getDb();
+  if (!von || !bis) return res.status(400).json({ fehler: 'von und bis erforderlich' });
+  const rows = db.prepare(`
+    SELECT t.datum, t.mitarbeiter_id, t.rayon_id, r.nummer AS rayon_nummer
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    WHERE t.datum BETWEEN ? AND ?
+      AND t.mitarbeiter_id IS NOT NULL
+    ORDER BY t.datum
+  `).all(von, bis);
+  res.json(rows);
+});
+
 // ─── Wochenbesetzung (tageweise Überschreibungen) ─────────────────────────────
 app.get('/api/tagesplan/wochenbesetzung', authMiddleware, (req, res) => {
   const { rayon_id, monat } = req.query;

@@ -61,7 +61,8 @@ export function SearchableSelect({
                 value={suche}
                 onChange={e => setSuche(e.target.value)}
                 autoFocus
-                autoComplete="off"
+                autoComplete="new-password"
+                name="searchable-select-no-autofill"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}

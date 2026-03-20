@@ -64,10 +64,11 @@ export default function DienstplanGrid() {
     setLadeDaten(true);
     setResult(null);
     try {
-      const [maRes, abwRes, zutRes] = await Promise.all([
+      const [maRes, abwRes, zutRes, tagesRes] = await Promise.all([
         api.get('/mitarbeiter'),
         api.get(`/abwesenheiten?von=${monat}-01&bis=${monat}-31`),
         api.get(`/monatszuteilungen?monat=${monat}`),
+        api.get(`/tagespläne?von=${monat}-01&bis=${monat}-31`),
       ]);
 
       const maListe = maRes.data.filter(m => m.aktiv !== 0);
@@ -90,6 +91,13 @@ export default function DienstplanGrid() {
               neuesGrid[z.mitarbeiter_id][day] = rayonCode;
             }
           }
+        }
+      }
+
+      // Overwrite with daily tagesplan assignments
+      for (const t of tagesRes.data) {
+        if (neuesGrid[t.mitarbeiter_id] !== undefined) {
+          neuesGrid[t.mitarbeiter_id][t.datum] = String(t.rayon_nummer).padStart(4, '0');
         }
       }
 
@@ -149,9 +157,7 @@ export default function DienstplanGrid() {
             Codes: <span className="font-mono bg-red-100 text-red-800 px-1 rounded">K</span> Krank &nbsp;
             <span className="font-mono bg-green-100 text-green-800 px-1 rounded">U</span> Urlaub &nbsp;
             <span className="font-mono bg-orange-100 text-orange-800 px-1 rounded">Kur</span> &nbsp;
-            <span className="font-mono bg-purple-100 text-purple-800 px-1 rounded">VS</span> &nbsp;
-            <span className="font-mono bg-blue-100 text-blue-800 px-1 rounded">SA1–SA8</span> &nbsp;
-            <span className="font-mono bg-yellow-50 text-yellow-900 px-1 rounded">0050</span> Rayon-Nr.
+            <span className="font-mono bg-blue-100 text-blue-800 px-1 rounded">SA1–SA8</span>
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

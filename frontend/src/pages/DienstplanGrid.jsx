@@ -101,9 +101,9 @@ export default function DienstplanGrid() {
                 key={t.datum}
                 className={`border-b border-r border-gray-200 flex flex-col items-center justify-center text-xs font-semibold shrink-0 ${
                   t.wochentag === 0
-                    ? 'text-red-500 bg-red-50'
+                    ? 'text-red-600 bg-red-100 font-bold'
                     : t.wochentag === 6
-                    ? 'text-orange-500 bg-orange-50'
+                    ? 'text-amber-700 bg-amber-100 font-bold'
                     : 'text-gray-600 bg-gray-100'
                 }`}
                 style={{ width: DAY_W, minWidth: DAY_W, height: 44 }}
@@ -152,7 +152,7 @@ export default function DienstplanGrid() {
                   <div
                     key={t.datum}
                     className={`flex items-center justify-center text-xs shrink-0 border-r border-gray-100 ${
-                      t.wochentag === 0 ? 'bg-red-50/40' : t.wochentag === 6 ? 'bg-orange-50/30' : ''
+                      t.wochentag === 0 ? 'bg-red-100/60' : t.wochentag === 6 ? 'bg-amber-50/60' : ''
                     }`}
                     style={{ width: DAY_W, minWidth: DAY_W, height: 48 }}
                   >

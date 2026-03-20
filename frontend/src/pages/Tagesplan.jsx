@@ -6,6 +6,7 @@ import {
 import api from '../utils/api.js';
 import { formatDatumLang, heuteDatum, statusLabel } from '../utils/helpers.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import MonthPicker from '../components/MonthPicker.jsx';
 
 // ─── Hilfsfunktion: Wochen eines Monats berechnen ─────────────────────────────
 function getWeeksOfMonth(monat) {
@@ -84,13 +85,7 @@ export default function Tagesplan() {
           <p className="text-gray-500 mt-1">Übersicht aller Rayone</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            className="input w-auto"
-            value={datum}
-            onChange={(e) => setDatum(e.target.value)}
-            autoComplete="off"
-          />
+          <MonthPicker value={datum} onChange={setDatum} mode="date" />
           <button
             onClick={() => setMonatModalOffen(true)}
             className="btn-secondary flex items-center gap-2"

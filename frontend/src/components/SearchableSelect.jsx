@@ -55,8 +55,8 @@ export function SearchableSelect({
             <div className="relative">
               <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
               <input
-                type="text"
-                className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                type="search"
+                className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-400 [&::-webkit-search-cancel-button]:hidden"
                 placeholder={searchPlaceholder}
                 value={suche}
                 onChange={e => setSuche(e.target.value)}

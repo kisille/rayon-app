@@ -11,6 +11,7 @@ import {
 import api from '../utils/api.js';
 import { heuteDatum, formatDatumLang } from '../utils/helpers.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import MonthPicker from '../components/MonthPicker';
 
 const MITNAHME_ART_LABEL = {
   vollmitnahme: 'Vollmitnahme',
@@ -133,13 +134,7 @@ export default function Mitnahmeplanung() {
           <h1 className="text-2xl font-bold text-gray-900">Mitnahmeplanung</h1>
           <p className="text-gray-500 mt-1">Optimale Mitnahmen automatisch berechnen oder manuell zuteilen</p>
         </div>
-        <input
-          type="date"
-          className="input w-auto"
-          value={datum}
-          onChange={(e) => setDatum(e.target.value)}
-          autoComplete="off"
-        />
+        <MonthPicker value={datum} onChange={setDatum} mode="date" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

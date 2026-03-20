@@ -233,6 +233,14 @@ app_path = os.path.join(BASE, 'frontend', 'src', 'App.jsx')
 with open(app_path, 'r', encoding='utf-8') as f:
     app = f.read()
 
+# Duplikat-Import entfernen falls vorhanden
+DUPE_IMPORT = "import DienstplanGrid from './pages/DienstplanGrid.jsx';\nimport DienstplanGrid from './pages/DienstplanGrid.jsx';"
+if DUPE_IMPORT in app:
+    app = app.replace(DUPE_IMPORT, "import DienstplanGrid from './pages/DienstplanGrid.jsx';")
+    with open(app_path, 'w', encoding='utf-8') as f:
+        f.write(app)
+    print('✓ frontend/src/App.jsx: Duplikat-Import entfernt.')
+
 if 'DienstplanGrid' not in app:
     app = app.replace(
         "import DienstplanImport from './pages/DienstplanImport.jsx';",
@@ -246,13 +254,22 @@ if 'DienstplanGrid' not in app:
         f.write(app)
     print('✓ frontend/src/App.jsx: Route eingefügt.')
 else:
-    print('✓ frontend/src/App.jsx: bereits aktuell, übersprungen.')
+    print('✓ frontend/src/App.jsx: bereits aktuell.')
 
 # ─── 4. frontend/src/components/Layout.jsx ───────────────────────────────────
 
 layout_path = os.path.join(BASE, 'frontend', 'src', 'components', 'Layout.jsx')
 with open(layout_path, 'r', encoding='utf-8') as f:
     layout = f.read()
+
+# Duplikat-Eintrag entfernen falls vorhanden
+DUPE = "  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: TableCellsIcon },\n  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: TableCellsIcon },"
+SINGLE = "  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: TableCellsIcon },"
+if DUPE in layout:
+    layout = layout.replace(DUPE, SINGLE)
+    with open(layout_path, 'w', encoding='utf-8') as f:
+        f.write(layout)
+    print('✓ frontend/src/components/Layout.jsx: Duplikat entfernt.')
 
 if 'TableCellsIcon' not in layout:
     layout = layout.replace(
@@ -267,7 +284,7 @@ if 'TableCellsIcon' not in layout:
         f.write(layout)
     print('✓ frontend/src/components/Layout.jsx: Navigation eingefügt.')
 else:
-    print('✓ frontend/src/components/Layout.jsx: bereits aktuell, übersprungen.')
+    print('✓ frontend/src/components/Layout.jsx: bereits aktuell.')
 
 # ─── Fahrzeuge modal fix ──────────────────────────────────────────────────────
 

@@ -1101,6 +1101,100 @@ app.post('/api/dienstplan/import', authMiddleware, (req, res) => {
   res.json({ erfolg: true, importiert, fehler: errors });
 });
 
+// ─── Dienstplan-Grid-Import ────────────────────────────────────────────────────
+app.post('/api/dienstplan/grid-import', authMiddleware, (req, res) => {
+  const { monat, eintraege, ersetzen } = req.body;
+  const db = getDb();
+
+  if (!monat || !Array.isArray(eintraege)) {
+    return res.status(400).json({ fehler: 'monat und eintraege erforderlich' });
+  }
+
+  const ABSENCE_CODES = new Set(['K', 'U', 'KUR', 'VS', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6', 'SA7', 'SA8', 'F']);
+  const CODE_STATUS = {
+    K: { status: 'krank', bemerkung: null },
+    U: { status: 'urlaub', bemerkung: null },
+    KUR: { status: 'sonstige', bemerkung: 'Kur' },
+    VS: { status: 'frei', bemerkung: 'VS' },
+    F: { status: 'frei', bemerkung: null },
+    SA1: { status: 'sonstige', bemerkung: 'SA1' },
+    SA2: { status: 'sonstige', bemerkung: 'SA2' },
+    SA3: { status: 'sonstige', bemerkung: 'SA3' },
+    SA4: { status: 'sonstige', bemerkung: 'SA4' },
+    SA5: { status: 'sonstige', bemerkung: 'SA5' },
+    SA6: { status: 'sonstige', bemerkung: 'SA6' },
+    SA7: { status: 'sonstige', bemerkung: 'SA7' },
+    SA8: { status: 'sonstige', bemerkung: 'SA8' },
+  };
+
+  const errors = [];
+  let importiertAbwesenheiten = 0;
+  let importiertZuteilungen = 0;
+
+  db.exec('BEGIN');
+  try {
+    if (ersetzen) {
+      db.prepare('DELETE FROM abwesenheiten WHERE datum LIKE ?').run(monat + '-%');
+      db.prepare('DELETE FROM monatszuteilungen WHERE monat = ?').run(monat);
+    }
+
+    const maCache = {};
+    const getMa = (pnr) => {
+      if (maCache[pnr] !== undefined) return maCache[pnr];
+      maCache[pnr] = db.prepare('SELECT id FROM mitarbeiter WHERE personalnummer = ? AND aktiv = 1').get(String(pnr)) || null;
+      return maCache[pnr];
+    };
+    const rayonCache = {};
+    const getRayon = (nummer) => {
+      if (rayonCache[nummer] !== undefined) return rayonCache[nummer];
+      rayonCache[nummer] = db.prepare('SELECT id FROM rayone WHERE nummer = ? AND aktiv = 1').get(Number(nummer)) || null;
+      return rayonCache[nummer];
+    };
+
+    // Only insert one monthly assignment per employee (first rayon number wins)
+    const maZuteilungSet = new Set();
+
+    for (const e of eintraege) {
+      const code = String(e.code || '').trim().toUpperCase();
+      if (!code) continue;
+
+      const ma = getMa(e.pnr);
+      if (!ma) { errors.push(`PNR ${e.pnr} nicht gefunden`); continue; }
+
+      if (ABSENCE_CODES.has(code)) {
+        const { status, bemerkung } = CODE_STATUS[code] || { status: 'sonstige', bemerkung: code };
+        db.prepare('INSERT OR REPLACE INTO abwesenheiten (mitarbeiter_id, datum, status, bemerkung) VALUES (?, ?, ?, ?)')
+          .run(ma.id, e.datum, status, bemerkung);
+        importiertAbwesenheiten++;
+      } else {
+        const rawNum = code.replace(/^0+/, '') || '0';
+        const num = parseInt(rawNum);
+        if (!isNaN(num) && num > 0) {
+          if (!maZuteilungSet.has(ma.id)) {
+            const rayon_nummer = Math.round(num / 10) * 10;
+            const rayon = getRayon(rayon_nummer);
+            if (!rayon) { errors.push(`Rayon ${rayon_nummer} nicht gefunden`); continue; }
+            db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
+              .run(monat, ma.id, rayon.id);
+            maZuteilungSet.add(ma.id);
+            importiertZuteilungen++;
+          }
+        } else {
+          errors.push(`Unbekannter Code "${e.code}" für PNR ${e.pnr}`);
+        }
+      }
+    }
+
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
+  }
+
+  res.json({ erfolg: true, importiertAbwesenheiten, importiertZuteilungen, fehler: errors });
+});
+
 // ─── Fairness-Statistik ───────────────────────────────────────────────────────
 app.get('/api/statistik', authMiddleware, (req, res) => {
   const db = getDb();

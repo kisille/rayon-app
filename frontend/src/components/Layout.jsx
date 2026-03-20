@@ -30,6 +30,7 @@ const navigation = [
   { name: 'Fahrzeuge', href: '/fahrzeuge', icon: TruckIcon },
   { name: 'Statistik', href: '/statistik', icon: ChartBarIcon },
   { name: 'Dienstplan-Import', href: '/dienstplan-import', icon: ArrowUpTrayIcon },
+  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: ArrowUpTrayIcon },
 ];
 
 const adminNavigation = [

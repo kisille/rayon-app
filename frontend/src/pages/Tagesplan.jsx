@@ -4,7 +4,7 @@ import {
   MagnifyingGlassIcon, PencilSquareIcon, UserIcon, CalendarIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
-import { formatDatumLang, heuteDatum, statusLabel } from '../utils/helpers.js';
+import { formatDatumLang, heuteDatum, statusLabel, statusBadgeClass } from '../utils/helpers.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
 import MonthPicker from '../components/MonthPicker.jsx';
 

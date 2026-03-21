@@ -121,7 +121,7 @@ export default function Tagesplan() {
 
       {/* Statistik-Zeile */}
       {!laden && (
-        <div className="grid grid-cols-3 gap-4 mb-4 no-print">
+        <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 mb-4 no-print">
           <div className="card text-center p-4">
             <div className="text-2xl font-bold text-green-600">{besetzt}</div>
             <div className="text-sm text-gray-500">Besetzt</div>
@@ -173,6 +173,23 @@ export default function Tagesplan() {
             )}
           </div>
         </>
+      )}
+
+      {/* Abwesenheiten – im Druck als eigener Abschnitt */}
+      {!laden && plan?.abwesenheiten?.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">Abwesende Mitarbeiter</h2>
+          <div className="flex flex-wrap gap-2">
+            {plan.abwesenheiten.map(a => (
+              <span
+                key={`${a.mitarbeiter_id}-${a.datum}`}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(a.status)}`}
+              >
+                {a.mitarbeiter_name} · {statusLabel(a.status)}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Legende */}
@@ -265,7 +282,12 @@ function RayonKarte({ eintrag, onClick }) {
 
       {aktueller_mitarbeiter ? (
         <div className="pl-4">
-          <div className="font-semibold text-sm text-gray-900">{aktueller_mitarbeiter.name}</div>
+          <div className="flex items-baseline gap-2">
+            <div className="font-semibold text-sm text-gray-900">{aktueller_mitarbeiter.name}</div>
+            {aktueller_mitarbeiter.fahrzeug_kennzeichen && (
+              <span className="text-xs text-gray-400 font-normal">{aktueller_mitarbeiter.fahrzeug_kennzeichen}</span>
+            )}
+          </div>
           {ist_mitnahme && vertritt_name && (
             <div className="text-xs text-gray-500 mt-0.5">Mitnahme von: {vertritt_name}</div>
           )}

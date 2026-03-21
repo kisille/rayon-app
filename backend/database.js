@@ -69,7 +69,7 @@ function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       mitarbeiter_id INTEGER NOT NULL,
       datum TEXT NOT NULL,
-      status TEXT NOT NULL CHECK(status IN ('anwesend', 'krank', 'urlaub', 'frei', 'sonstige')),
+      status TEXT NOT NULL CHECK(status IN ('anwesend', 'krank', 'urlaub', 'frei', 'kur', 'sonstige')),
       bemerkung TEXT,
       UNIQUE(mitarbeiter_id, datum),
       FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
@@ -195,6 +195,27 @@ function initSchema() {
   try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN erstzulassung TEXT"); } catch {}
   try { db.exec("ALTER TABLE fahrzeuge ADD COLUMN letzte_vorführung TEXT"); } catch {}
   try { db.exec("ALTER TABLE benutzer ADD COLUMN rolle TEXT NOT NULL DEFAULT 'admin'"); } catch {}
+
+  // Migration: abwesenheiten CHECK constraint um 'kur' erweitern
+  try {
+    const tbl = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='abwesenheiten'").get();
+    if (tbl && tbl.sql && !tbl.sql.includes("'kur'")) {
+      db.exec(`PRAGMA foreign_keys = OFF`);
+      db.exec(`CREATE TABLE abwesenheiten_mig (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mitarbeiter_id INTEGER NOT NULL,
+        datum TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('anwesend', 'krank', 'urlaub', 'frei', 'kur', 'sonstige')),
+        bemerkung TEXT,
+        UNIQUE(mitarbeiter_id, datum),
+        FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+      )`);
+      db.exec('INSERT OR IGNORE INTO abwesenheiten_mig SELECT * FROM abwesenheiten');
+      db.exec('DROP TABLE abwesenheiten');
+      db.exec('ALTER TABLE abwesenheiten_mig RENAME TO abwesenheiten');
+      db.exec(`PRAGMA foreign_keys = ON`);
+    }
+  } catch (e) { console.error('Migration abwesenheiten kur:', e.message); }
 
   // Migration: UNIQUE(monat, mitarbeiter_id) → UNIQUE(monat, mitarbeiter_id, rayon_id)
   // Ermöglicht 1 Ganzmitnahme + max. 2 Teilmitnahmen pro Mitarbeiter pro Monat

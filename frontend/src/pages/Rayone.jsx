@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MagnifyingGlassIcon, MapIcon, PlusIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, MapIcon, PlusIcon, TrashIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 
 const PRIORITÄT_BADGE = {
   hoch:   'bg-red-100 text-red-700',
@@ -14,9 +15,13 @@ function formatRayonNr(nummer) {
   return String(nummer).padStart(4, '0');
 }
 
+const PAGE_SIZE = 24;
+
 export default function Rayone() {
+  const confirm = useConfirm();
   const [rayone, setRayone] = useState([]);
   const [suche, setSuche] = useState('');
+  const [seite, setSeite] = useState(1);
   const [laden, setLaden] = useState(true);
   const [modalOffen, setModalOffen] = useState(false);
   const [formular, setFormular] = useState({ nummer: '', bezeichnung: '', gebiet: '', priorität: 'normal' });
@@ -47,6 +52,9 @@ export default function Rayone() {
     r.bezeichnung.toLowerCase().includes(suche.toLowerCase()) ||
     (r.gebiet || '').toLowerCase().includes(suche.toLowerCase())
   );
+  const seitenAnzahl = Math.ceil(gefilterte.length / PAGE_SIZE);
+  const aktuelleSeite = Math.min(seite, seitenAnzahl || 1);
+  const sichtbar = gefilterte.slice((aktuelleSeite - 1) * PAGE_SIZE, aktuelleSeite * PAGE_SIZE);
 
   const öffneNeu = () => {
     setFormular({ nummer: '', bezeichnung: '', gebiet: '', priorität: 'normal' });
@@ -74,7 +82,7 @@ export default function Rayone() {
   const löschen = async (e, id) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm('Rayon wirklich deaktivieren?')) return;
+    if (!await confirm('Rayon wirklich deaktivieren?')) return;
     await api.delete(`/rayone/${id}`);
     ladeData();
   };
@@ -101,7 +109,7 @@ export default function Rayone() {
           className="input pl-9"
           placeholder="Nummer, Bezeichnung oder Gebiet suchen..."
           value={suche}
-          onChange={(e) => setSuche(e.target.value)}
+          onChange={(e) => { setSuche(e.target.value); setSeite(1); }}
           autoComplete="new-password"
           readOnly
           onFocus={e => { e.target.readOnly = false; }}
@@ -109,7 +117,7 @@ export default function Rayone() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-        {gefilterte.map((r) => {
+        {sichtbar.map((r) => {
           const prio = r.priorität || 'normal';
           return (
             <Link
@@ -174,6 +182,34 @@ export default function Rayone() {
           </div>
         )}
       </div>
+
+      {seitenAnzahl > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            onClick={() => setSeite(s => Math.max(1, s - 1))}
+            disabled={aktuelleSeite === 1}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          >
+            <ChevronLeftIcon className="w-4 h-4" />
+          </button>
+          {Array.from({ length: seitenAnzahl }, (_, i) => i + 1).map(n => (
+            <button
+              key={n}
+              onClick={() => setSeite(n)}
+              className={`w-8 h-8 rounded-lg text-sm font-medium ${aktuelleSeite === n ? 'bg-yellow-400 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              {n}
+            </button>
+          ))}
+          <button
+            onClick={() => setSeite(s => Math.min(seitenAnzahl, s + 1))}
+            disabled={aktuelleSeite === seitenAnzahl}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          >
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Modal: Neuer Rayon */}
       {modalOffen && (

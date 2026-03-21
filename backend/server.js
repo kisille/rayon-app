@@ -763,6 +763,13 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
 
   const rayone = db.prepare('SELECT * FROM rayone WHERE aktiv = 1 ORDER BY nummer').all();
 
+  // Fahrzeuge je Mitarbeiter (zugeteiltes aktives Fahrzeug)
+  const fahrzeugRows = db.prepare(
+    'SELECT mitarbeiter_id, kennzeichen FROM fahrzeuge WHERE aktiv = 1 AND mitarbeiter_id IS NOT NULL'
+  ).all();
+  const fahrzeugMap = {};
+  for (const f of fahrzeugRows) fahrzeugMap[f.mitarbeiter_id] = f.kennzeichen;
+
   // Abwesenheiten für den Tag
   const abwesenheiten = db.prepare(`
     SELECT a.*, m.name as mitarbeiter_name
@@ -856,7 +863,7 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
     return {
       rayon,
       stamm_mitarbeiter: stammMitarbeiter,
-      aktueller_mitarbeiter: mitarbeiter,
+      aktueller_mitarbeiter: mitarbeiter ? { ...mitarbeiter, fahrzeug_kennzeichen: fahrzeugMap[mitarbeiter.id] || null } : null,
       ist_mitnahme,
       ist_teilbesetzung,
       vertritt_name,
@@ -1064,13 +1071,13 @@ app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
   ).all();
 
   const zuteilungen = db.prepare(`
-    SELECT mz.mitarbeiter_id, r.nummer as rayon_nummer
+    SELECT mz.mitarbeiter_id, mz.rayon_id, r.nummer as rayon_nummer
     FROM monatszuteilungen mz
     JOIN rayone r ON mz.rayon_id = r.id
     WHERE mz.monat = ? AND mz.ist_teilzuteilung = 0
   `).all(monat);
   const zuteilungMap = {};
-  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = z.rayon_nummer;
+  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = { nummer: z.rayon_nummer, id: z.rayon_id };
 
   const abwesenheiten = db.prepare(
     'SELECT mitarbeiter_id, datum, status FROM abwesenheiten WHERE datum LIKE ?'
@@ -1109,7 +1116,8 @@ app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
       id: m.id,
       name: m.name,
       personalnummer: m.personalnummer,
-      rayon_nummer: zuteilungMap[m.id] || null,
+      rayon_nummer: zuteilungMap[m.id]?.nummer || null,
+      rayon_id: zuteilungMap[m.id]?.id || null,
       abwesenheiten: abwesenheitMap[m.id] || {},
       tagesplan: tagesplanMap[m.id] || {},
     })),

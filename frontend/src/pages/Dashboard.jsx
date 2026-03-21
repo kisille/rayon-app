@@ -13,8 +13,10 @@ import {
 import api from '../utils/api.js';
 import { formatDatumLang, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 
 export default function Dashboard() {
+  const confirm = useConfirm();
   const [daten, setDaten] = useState(null);
   const [laden, setLaden] = useState(true);
   const [abwesenheitModal, setAbwesenheitModal] = useState(false);
@@ -56,7 +58,7 @@ export default function Dashboard() {
   };
 
   const löscheAbwesenheit = async (a) => {
-    if (!window.confirm(`Abwesenheit von ${a.mitarbeiter_name} wirklich löschen?`)) return;
+    if (!await confirm(`Abwesenheit von ${a.mitarbeiter_name} wirklich löschen?`)) return;
     await api.delete(`/abwesenheiten/${a.mitarbeiter_id}/${a.datum}`);
     setLaden(true);
     ladeDaten();
@@ -324,6 +326,7 @@ function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
               <option value="krank">Krank</option>
               <option value="urlaub">Urlaub</option>
               <option value="frei">Frei</option>
+              <option value="kur">Kur</option>
               <option value="sonstige">Sonstige</option>
             </select>
           </div>

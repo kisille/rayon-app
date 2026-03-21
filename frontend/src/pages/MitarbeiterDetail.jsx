@@ -4,11 +4,13 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import api from '../utils/api.js';
 import { kompetenzLabel, kompetenzBadgeClass } from '../utils/helpers.js';
 import { Modal } from './Mitarbeiter.jsx';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 export default function MitarbeiterDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [mitarbeiter, setMitarbeiter] = useState(null);
   const [rayone, setRayone] = useState([]);
   const [laden, setLaden] = useState(true);
@@ -48,7 +50,7 @@ export default function MitarbeiterDetail() {
   };
 
   const handleLöschen = async () => {
-    if (!window.confirm(`${mitarbeiter.name} wirklich löschen?`)) return;
+    if (!await confirm(`${mitarbeiter.name} wirklich löschen?`)) return;
     await api.delete(`/mitarbeiter/${id}`);
     navigate('/mitarbeiter');
   };

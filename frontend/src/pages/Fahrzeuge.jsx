@@ -16,6 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 
 const STATUS_OPTIONEN = [
   { value: 'verfügbar', label: 'Verfügbar', farbe: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
@@ -96,6 +97,7 @@ const LEERES_FORMULAR = {
 };
 
 export default function Fahrzeuge() {
+  const confirm = useConfirm();
   const location = useLocation();
   const navigate = useNavigate();
   const editIdFromState = location.state?.editId;
@@ -191,7 +193,7 @@ export default function Fahrzeuge() {
   };
 
   const löschen = async (id) => {
-    if (!confirm('Fahrzeug wirklich entfernen?')) return;
+    if (!await confirm('Fahrzeug wirklich entfernen?')) return;
     await api.delete(`/fahrzeuge/${id}`);
     ladeFahrzeuge();
   };

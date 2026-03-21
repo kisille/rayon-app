@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { ToastProvider } from './components/Toast.jsx';
+import { ConfirmProvider } from './components/ConfirmDialog.jsx';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
@@ -63,6 +65,8 @@ function App() {
   };
 
   return (
+    <ToastProvider>
+    <ConfirmProvider>
     <AuthContext.Provider value={{ auth, login, logout }}>
       <BrowserRouter>
         <Routes>
@@ -89,6 +93,8 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>
+    </ConfirmProvider>
+    </ToastProvider>
   );
 }
 

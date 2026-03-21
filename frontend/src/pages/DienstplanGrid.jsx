@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowPathIcon } from '@heroicons/react/24/outline';
 import api from '../utils/api';
 import MonthPicker from '../components/MonthPicker';
 
@@ -82,8 +83,16 @@ export default function DienstplanGrid() {
               <span className="text-blue-800 font-semibold">SA1&ndash;SA8</span>
             </div>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
             <MonthPicker value={monat} onChange={setMonat} mode="month" />
+            <button
+              onClick={() => ladeDaten(monat)}
+              disabled={loading}
+              title="Aktualisieren"
+              className="p-2 rounded-md text-gray-500 hover:bg-gray-200 disabled:opacity-40"
+            >
+              <ArrowPathIcon className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
 
@@ -139,7 +148,7 @@ export default function DienstplanGrid() {
                   ? STATUS_KUERZEL[abw] || abw
                   : tpRayon != null
                   ? formatRayon(tpRayon)
-                  : m.rayon_nummer && t.wochentag !== 0
+                  : m.rayon_nummer && t.wochentag !== 0 && t.wochentag !== 6
                   ? formatRayon(m.rayon_nummer)
                   : null;
                 const klasse = abw

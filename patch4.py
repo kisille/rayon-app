@@ -3957,6 +3957,2346 @@ function StatusKarte({ label, wert, icon, bg, aktiv, onClick }) {
 
 ''')
 
+write_file('frontend/src/pages/Jahreskalender.jsx', '''\
+import React, { useState, useEffect, useRef } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDay, getDaysInMonth } from 'date-fns';
+import { de } from 'date-fns/locale';
+import api from '../utils/api.js';
+import { statusBadgeClass, statusLabel } from '../utils/helpers.js';
+
+const STATUS_FARBEN = {
+  krank: 'bg-red-500',
+  urlaub: 'bg-blue-500',
+  frei: 'bg-green-500',
+  sonstige: 'bg-gray-400',
+};
+
+export default function Jahreskalender() {
+  const [jahr, setJahr] = useState(new Date().getFullYear());
+  const [abwesenheitMap, setAbwesenheitMap] = useState({});
+  const [laden, setLaden] = useState(true);
+  const [selectedTag, setSelectedTag] = useState(null); // { datum, list }
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+  const popupRef = useRef(null);
+  const heute = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+    const laden_ = async () => {
+      setLaden(true);
+      try {
+        const res = await api.get('/abwesenheiten', {
+          params: { von: `${jahr}-01-01`, bis: `${jahr}-12-31` },
+        });
+        const map = {};
+        for (const a of res.data) {
+          if (!map[a.datum]) map[a.datum] = [];
+          map[a.datum].push(a);
+        }
+        setAbwesenheitMap(map);
+      } finally {
+        setLaden(false);
+      }
+    };
+    laden_();
+  }, [jahr]);
+
+  // Popup schliessen bei Klick ausserhalb
+  useEffect(() => {
+    const handler = (e) => {
+      if (popupRef.current && !popupRef.current.contains(e.target)) {
+        setSelectedTag(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleTagClick = (datum, list, e) => {
+    if (!list || list.length === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPopupPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    setSelectedTag({ datum, list });
+  };
+
+  const monate = Array.from({ length: 12 }, (_, i) => i);
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Jahreskalender</h1>
+          <p className="text-gray-500 mt-1">Abwesenheiten im Jahresüberblick</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary p-2"
+            onClick={() => setJahr(j => j - 1)}
+            title="Vorjahr"
+          >
+            <ChevronLeftIcon className="w-4 h-4" />
+          </button>
+          <span className="text-xl font-bold text-gray-800 w-16 text-center">{jahr}</span>
+          <button
+            className="btn-secondary p-2"
+            onClick={() => setJahr(j => j + 1)}
+            title="Nächstes Jahr"
+          >
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
+          <button
+            className="btn-secondary ml-2"
+            onClick={() => setJahr(new Date().getFullYear())}
+          >
+            Heute
+          </button>
+        </div>
+      </div>
+
+      {/* Legende */}
+      <div className="card mb-6 flex items-center gap-6 flex-wrap">
+        {Object.entries(STATUS_FARBEN).map(([status, farbe]) => (
+          <div key={status} className="flex items-center gap-2 text-sm text-gray-600">
+            <span className={`w-3 h-3 rounded-full ${farbe}`} />
+            {statusLabel(status)}
+          </div>
+        ))}
+      </div>
+
+      {laden ? (
+        <div className="flex items-center justify-center h-64 text-gray-400">Laden...</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {monate.map(monatIndex => (
+            <MonatsKarte
+              key={monatIndex}
+              jahr={jahr}
+              monatIndex={monatIndex}
+              abwesenheitMap={abwesenheitMap}
+              heute={heute}
+              onTagClick={handleTagClick}
+              selectedDatum={selectedTag?.datum}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Popup für Tagesdetails */}
+      {selectedTag && (
+        <div
+          ref={popupRef}
+          className="fixed z-50 card shadow-xl border border-gray-200 min-w-64 max-w-xs"
+          style={{ top: popupPos.top, left: popupPos.left }}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-semibold text-gray-800 text-sm">
+              {format(parseISO(selectedTag.datum), 'EEEE, dd. MMMM yyyy', { locale: de })}
+            </span>
+            <button
+              onClick={() => setSelectedTag(null)}
+              className="text-gray-300 hover:text-gray-600 ml-2"
+            >
+              <XMarkIcon className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {selectedTag.list.map((a) => (
+              <div key={a.id} className="flex items-center gap-2">
+                <span className={statusBadgeClass(a.status)}>{statusLabel(a.status)}</span>
+                <span className="text-sm text-gray-700">{a.mitarbeiter_name}</span>
+                {a.bemerkung && (
+                  <span className="text-xs text-gray-400">({a.bemerkung})</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonatsKarte({ jahr, monatIndex, abwesenheitMap, heute, onTagClick, selectedDatum }) {
+  const ersterTag = new Date(jahr, monatIndex, 1);
+  const monatsName = format(ersterTag, 'MMMM', { locale: de });
+  const tageImMonat = getDaysInMonth(ersterTag);
+
+  // Wochentag des ersten Tags (0=So → umrechnen auf Mo=0)
+  let startWochentag = getDay(ersterTag); // 0=So,1=Mo,...,6=Sa
+  startWochentag = (startWochentag + 6) % 7; // Mo=0,...,So=6
+
+  const tagNummern = Array.from({ length: tageImMonat }, (_, i) => i + 1);
+  const wochentage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+  return (
+    <div className="card">
+      <h3 className="font-semibold text-gray-800 text-sm mb-3 text-center">{monatsName}</h3>
+
+      {/* Wochentag-Header */}
+      <div className="grid grid-cols-7 mb-1">
+        {wochentage.map(wt => (
+          <div key={wt} className="text-center text-xs text-gray-400 font-medium py-0.5">{wt}</div>
+        ))}
+      </div>
+
+      {/* Tage */}
+      <div className="grid grid-cols-7">
+        {/* Leerfelder vor dem ersten Tag */}
+        {Array.from({ length: startWochentag }, (_, i) => (
+          <div key={`leer-${i}`} />
+        ))}
+
+        {tagNummern.map(tag => {
+          const datum = `${jahr}-${String(monatIndex + 1).padStart(2, '0')}-${String(tag).padStart(2, '0')}`;
+          const abw = abwesenheitMap[datum] || [];
+          const istHeute = datum === heute;
+          const istSelected = datum === selectedDatum;
+
+          // Wochentag für Wochenende-Styling
+          const tagObj = new Date(jahr, monatIndex, tag);
+          const wt = getDay(tagObj);
+          const istWochenende = wt === 0 || wt === 6;
+
+          return (
+            <div
+              key={tag}
+              onClick={(e) => onTagClick(datum, abw, e)}
+              className={`
+                relative flex flex-col items-center py-0.5 rounded cursor-pointer
+                ${abw.length > 0 ? 'hover:bg-yellow-50' : ''}
+                ${istSelected ? 'bg-yellow-100' : ''}
+              `}
+              title={abw.length > 0 ? `${abw.length} Abwesenheit(en)` : ''}
+            >
+              <span className={`
+                text-xs w-6 h-6 flex items-center justify-center rounded-full
+                ${istHeute ? 'bg-yellow-400 text-gray-900 font-bold' : ''}
+                ${!istHeute && istWochenende ? 'text-gray-400' : ''}
+                ${!istHeute && !istWochenende ? 'text-gray-700' : ''}
+              `}>
+                {tag}
+              </span>
+
+              {/* Abwesenheits-Punkte */}
+              {abw.length > 0 && (
+                <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
+                  {abw.slice(0, 3).map((a, i) => (
+                    <span
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full ${STATUS_FARBEN[a.status] || 'bg-gray-400'}`}
+                    />
+                  ))}
+                  {abw.length > 3 && (
+                    <span className="text-gray-400" style={{ fontSize: '8px', lineHeight: '6px' }}>
+                      +{abw.length - 3}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Monats-Zusammenfassung */}
+      <MonatsSummary monatIndex={monatIndex} jahr={jahr} abwesenheitMap={abwesenheitMap} />
+    </div>
+  );
+}
+
+function MonatsSummary({ monatIndex, jahr, abwesenheitMap }) {
+  const counts = { krank: 0, urlaub: 0, frei: 0, sonstige: 0 };
+  const tage = getDaysInMonth(new Date(jahr, monatIndex, 1));
+  for (let t = 1; t <= tage; t++) {
+    const datum = `${jahr}-${String(monatIndex + 1).padStart(2, '0')}-${String(t).padStart(2, '0')}`;
+    for (const a of (abwesenheitMap[datum] || [])) {
+      if (counts[a.status] !== undefined) counts[a.status]++;
+    }
+  }
+  const gesamt = Object.values(counts).reduce((s, v) => s + v, 0);
+  if (gesamt === 0) return null;
+
+  return (
+    <div className="mt-2 pt-2 border-t border-gray-100 flex gap-2 flex-wrap">
+      {Object.entries(counts).map(([status, count]) =>
+        count > 0 ? (
+          <span key={status} className="flex items-center gap-1 text-xs text-gray-500">
+            <span className={`w-2 h-2 rounded-full ${STATUS_FARBEN[status]}`} />
+            {count}
+          </span>
+        ) : null
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/AuditLog.jsx', '''\
+import React, { useState, useEffect } from 'react';
+import { ArrowPathIcon, FunnelIcon } from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+
+const METHODE_FARBE = {
+  POST: 'bg-green-100 text-green-800',
+  PUT: 'bg-blue-100 text-blue-800',
+  DELETE: 'bg-red-100 text-red-800',
+  PATCH: 'bg-orange-100 text-orange-800',
+};
+
+const METHODE_LABEL = { POST: 'Erstellt', PUT: 'Geändert', DELETE: 'Gelöscht', PATCH: 'Aktualisiert' };
+
+function pfadLabel(pfad) {
+  const map = [
+    ['/mitarbeiter', 'Mitarbeiter'],
+    ['/rayone', 'Rayon'],
+    ['/kompetenzen', 'Kompetenz'],
+    ['/monatszuteilungen', 'Monatszuteilung'],
+    ['/abwesenheiten', 'Abwesenheit'],
+    ['/fahrzeuge', 'Fahrzeug'],
+    ['/tagesplan', 'Tagesplan'],
+    ['/mitnahme', 'Mitnahmeplanung'],
+    ['/dienstplan', 'Dienstplan-Import'],
+    ['/benutzer', 'Benutzer'],
+  ];
+  for (const [key, label] of map) {
+    if (pfad.includes(key)) return label;
+  }
+  return pfad;
+}
+
+export default function AuditLog() {
+  const [eintraege, setEintraege] = useState([]);
+  const [gesamt, setGesamt] = useState(0);
+  const [laden, setLaden] = useState(true);
+  const [seite, setSeite] = useState(0);
+  const [filterBenutzer, setFilterBenutzer] = useState('');
+  const [filterMethode, setFilterMethode] = useState('');
+  const LIMIT = 50;
+
+  const laden_ = async () => {
+    setLaden(true);
+    try {
+      const { data } = await api.get('/audit-log', { params: { limit: LIMIT, offset: seite * LIMIT } });
+      setEintraege(data.eintraege);
+      setGesamt(data.gesamt);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLaden(false);
+    }
+  };
+
+  useEffect(() => { laden_(); }, [seite]);
+
+  const gefiltriert = eintraege.filter(e => {
+    if (filterBenutzer && !e.benutzername.includes(filterBenutzer)) return false;
+    if (filterMethode && e.methode !== filterMethode) return false;
+    return true;
+  });
+
+  const formatZeitstempel = (ts) => {
+    if (!ts) return '';
+    const d = new Date(ts.replace(' ', 'T') + 'Z');
+    return d.toLocaleString('de-AT', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const formatDetails = (details) => {
+    try {
+      const obj = JSON.parse(details);
+      const wichtig = Object.entries(obj)
+        .filter(([k]) => !['id', 'erstellt_am'].includes(k))
+        .slice(0, 3)
+        .map(([k, v]) => `${k}: ${String(v).substring(0, 40)}`)
+        .join(', ');
+      return wichtig || '–';
+    } catch {
+      return details?.substring(0, 80) || '–';
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Audit-Log</h1>
+          <p className="text-gray-500 mt-1">{gesamt} Einträge insgesamt</p>
+        </div>
+        <button onClick={laden_} className="btn-secondary flex items-center gap-2">
+          <ArrowPathIcon className="w-4 h-4" />
+          Aktualisieren
+        </button>
+      </div>
+
+      {/* Filter */}
+      <div className="card mb-4 p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <FunnelIcon className="w-4 h-4 text-gray-400" />
+          <input
+            className="input w-48"
+            placeholder="Benutzer filtern..."
+            value={filterBenutzer}
+            onChange={e => setFilterBenutzer(e.target.value)}
+            autoComplete="off"
+          />
+          <select className="input w-44" value={filterMethode} onChange={e => setFilterMethode(e.target.value)}>
+            <option value="">Alle Aktionen</option>
+            <option value="POST">Erstellt (POST)</option>
+            <option value="PUT">Geändert (PUT)</option>
+            <option value="DELETE">Gelöscht (DELETE)</option>
+          </select>
+          {(filterBenutzer || filterMethode) && (
+            <button onClick={() => { setFilterBenutzer(''); setFilterMethode(''); }} className="text-sm text-gray-500 hover:text-gray-700">
+              Filter zurücksetzen
+            </button>
+          )}
+        </div>
+      </div>
+
+      {laden ? (
+        <div className="text-center py-12 text-gray-400">Lade Audit-Log...</div>
+      ) : (
+        <div className="card p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Zeitstempel</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Benutzer</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Aktion</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Bereich</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {gefiltriert.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-gray-400">Keine Einträge gefunden</td>
+                  </tr>
+                ) : gefiltriert.map(e => (
+                  <tr key={e.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
+                      {formatZeitstempel(e.zeitstempel)}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{e.benutzername}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${METHODE_FARBE[e.methode] || 'bg-gray-100 text-gray-700'}`}>
+                        {METHODE_LABEL[e.methode] || e.methode}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{pfadLabel(e.pfad)}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate" title={e.details}>
+                      {formatDetails(e.details)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {gesamt > LIMIT && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+              <span className="text-sm text-gray-500">
+                Seite {seite + 1} von {Math.ceil(gesamt / LIMIT)}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSeite(s => Math.max(0, s - 1))}
+                  disabled={seite === 0}
+                  className="btn-secondary py-1 px-3 text-sm disabled:opacity-40"
+                >Zurück</button>
+                <button
+                  onClick={() => setSeite(s => s + 1)}
+                  disabled={(seite + 1) * LIMIT >= gesamt}
+                  className="btn-secondary py-1 px-3 text-sm disabled:opacity-40"
+                >Weiter</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/Benutzer.jsx', '''\
+import React, { useState, useEffect } from 'react';
+import { PlusIcon, PencilIcon, TrashIcon, ShieldCheckIcon, UserIcon } from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+import { formatDatum } from '../utils/helpers.js';
+
+export default function Benutzer() {
+  const [benutzer, setBenutzer] = useState([]);
+  const [laden, setLaden] = useState(true);
+  const [modalOffen, setModalOffen] = useState(false);
+  const [bearbeiten, setBearbeiten] = useState(null);
+  const [form, setForm] = useState({ benutzername: '', passwort: '', name: '', rolle: 'schichtleiter' });
+  const [fehler, setFehler] = useState('');
+  const [speichern, setSpeichern] = useState(false);
+
+  const laden_ = async () => {
+    setLaden(true);
+    try {
+      const { data } = await api.get('/benutzer');
+      setBenutzer(data);
+    } catch (e) {
+      setFehler(e.response?.data?.fehler || 'Fehler beim Laden');
+    } finally {
+      setLaden(false);
+    }
+  };
+
+  useEffect(() => { laden_(); }, []);
+
+  const oeffneNeu = () => {
+    setBearbeiten(null);
+    setForm({ benutzername: '', passwort: '', name: '', rolle: 'schichtleiter' });
+    setFehler('');
+    setModalOffen(true);
+  };
+
+  const oeffneBearbeiten = (b) => {
+    setBearbeiten(b);
+    setForm({ benutzername: b.benutzername, passwort: '', name: b.name, rolle: b.rolle });
+    setFehler('');
+    setModalOffen(true);
+  };
+
+  const speichern_ = async (e) => {
+    e.preventDefault();
+    setSpeichern(true);
+    setFehler('');
+    try {
+      if (bearbeiten) {
+        await api.put(`/benutzer/${bearbeiten.id}`, { name: form.name, rolle: form.rolle, passwort: form.passwort || undefined });
+      } else {
+        await api.post('/benutzer', form);
+      }
+      setModalOffen(false);
+      laden_();
+    } catch (e) {
+      setFehler(e.response?.data?.fehler || 'Fehler beim Speichern');
+    } finally {
+      setSpeichern(false);
+    }
+  };
+
+  const loeschen = async (b) => {
+    if (!confirm(`Benutzer "${b.name}" wirklich löschen?`)) return;
+    try {
+      await api.delete(`/benutzer/${b.id}`);
+      laden_();
+    } catch (e) {
+      alert(e.response?.data?.fehler || 'Fehler beim Löschen');
+    }
+  };
+
+  const rolleLabel = (rolle) => rolle === 'admin' ? 'Administrator' : 'Schichtleiter';
+  const rolleBadge = (rolle) => rolle === 'admin'
+    ? 'bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded-full'
+    : 'bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Benutzerverwaltung</h1>
+          <p className="text-gray-500 mt-1">Benutzer und Zugriffsrechte verwalten</p>
+        </div>
+        <button onClick={oeffneNeu} className="btn-primary flex items-center gap-2">
+          <PlusIcon className="w-4 h-4" />
+          Neuer Benutzer
+        </button>
+      </div>
+
+      {/* Hinweis */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-sm text-blue-800">
+        <strong>Rollen:</strong> <strong>Administrator</strong> hat vollen Zugriff inkl. Benutzerverwaltung und Audit-Log.
+        <strong> Schichtleiter</strong> kann Tagespläne, Abwesenheiten und Mitnahmeplanung bearbeiten, aber keine Benutzer verwalten.
+      </div>
+
+      {laden ? (
+        <div className="text-center py-12 text-gray-400">Lade Benutzer...</div>
+      ) : (
+        <div className="card p-0 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Name</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Benutzername</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Rolle</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Erstellt am</th>
+                <th className="px-6 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {benutzer.map(b => (
+                <tr key={b.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                        {b.rolle === 'admin'
+                          ? <ShieldCheckIcon className="w-4 h-4 text-red-600" />
+                          : <UserIcon className="w-4 h-4 text-blue-600" />
+                        }
+                      </div>
+                      <span className="font-medium text-gray-900">{b.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-gray-600 font-mono text-sm">{b.benutzername}</td>
+                  <td className="px-6 py-4">
+                    <span className={rolleBadge(b.rolle)}>{rolleLabel(b.rolle)}</span>
+                  </td>
+                  <td className="px-6 py-4 text-gray-500 text-sm">{formatDatum(b.erstellt_am?.split(' ')[0])}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => oeffneBearbeiten(b)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
+                        <PencilIcon className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => loeschen(b)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Modal */}
+      {modalOffen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setModalOffen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {bearbeiten ? 'Benutzer bearbeiten' : 'Neuer Benutzer'}
+              </h2>
+            </div>
+            <form onSubmit={speichern_} className="px-6 py-4 space-y-4">
+              <div>
+                <label className="label">Name (Anzeigename)</label>
+                <input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required autoComplete="off" />
+              </div>
+              {!bearbeiten && (
+                <div>
+                  <label className="label">Benutzername</label>
+                  <input className="input" value={form.benutzername} onChange={e => setForm({ ...form, benutzername: e.target.value })} required autoComplete="off" />
+                </div>
+              )}
+              <div>
+                <label className="label">{bearbeiten ? 'Neues Passwort (leer = nicht ändern)' : 'Passwort'}</label>
+                <input
+                  type="password"
+                  className="input"
+                  value={form.passwort}
+                  onChange={e => setForm({ ...form, passwort: e.target.value })}
+                  required={!bearbeiten}
+                  autoComplete="new-password"
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label className="label">Rolle</label>
+                <select className="input" value={form.rolle} onChange={e => setForm({ ...form, rolle: e.target.value })}>
+                  <option value="schichtleiter">Schichtleiter</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              {fehler && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{fehler}</div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setModalOffen(false)} className="btn-secondary">Abbrechen</button>
+                <button type="submit" disabled={speichern} className="btn-primary">
+                  {speichern ? 'Speichern...' : 'Speichern'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/Login.jsx', '''\
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../App.jsx';
+import api from '../utils/api.js';
+
+export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ benutzername: '', passwort: '' });
+  const [fehler, setFehler] = useState('');
+  const [laden, setLaden] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setFehler('');
+    setLaden(true);
+    try {
+      const { data } = await api.post('/auth/login', form);
+      login(data.token, { name: data.name, benutzername: form.benutzername, rolle: data.rolle || 'admin' });
+      navigate('/');
+    } catch (err) {
+      if (!err.response) {
+        setFehler('Keine Verbindung zum Server. Bitte stellen Sie sicher, dass das Backend läuft (node server.js).');
+      } else if (err.response.status === 401) {
+        setFehler('Ungültige Anmeldedaten. Benutzername: admin, Passwort: admin123');
+      } else {
+        setFehler(`Fehler: ${err.response.status} – ${err.response.data?.fehler || 'Unbekannter Fehler'}`);
+      }
+    } finally {
+      setLaden(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-yellow-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo/Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-yellow-400 rounded-2xl shadow-lg mb-4">
+            <span className="text-4xl font-black text-white">P</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Rayon-Verwaltung</h1>
+          <p className="text-gray-500 mt-1">Anmeldung für Standortleiter</p>
+        </div>
+
+        {/* Login-Formular */}
+        <div className="card">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="label">Benutzername</label>
+              <input
+                type="text"
+                className="input"
+                value={form.benutzername}
+                onChange={(e) => setForm({ ...form, benutzername: e.target.value })}
+                placeholder="admin"
+                required
+                autoFocus
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="label">Passwort</label>
+              <input
+                type="password"
+                className="input"
+                value={form.passwort}
+                onChange={(e) => setForm({ ...form, passwort: e.target.value })}
+                placeholder="••••••••"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            {fehler && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {fehler}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={laden}
+              className="btn-primary w-full py-3 text-base"
+            >
+              {laden ? 'Anmelden...' : 'Anmelden'}
+            </button>
+          </form>
+
+          <div className="mt-4 pt-4 border-t border-gray-100 text-center text-xs text-gray-400">
+            Standard-Login: admin / admin123
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/Mitnahmeplanung.jsx', '''\
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowsRightLeftIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  SparklesIcon,
+  CheckIcon,
+  PencilSquareIcon,
+  MagnifyingGlassIcon,
+} from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+import { heuteDatum, formatDatumLang } from '../utils/helpers.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import MonthPicker from '../components/MonthPicker';
+
+const MITNAHME_ART_LABEL = {
+  vollmitnahme: 'Vollmitnahme',
+  teilmitnahme: 'Teilmitnahme',
+};
+
+export default function Mitnahmeplanung() {
+  const [datum, setDatum] = useState(heuteDatum());
+  const [mitarbeiter, setMitarbeiter] = useState([]);
+  const [rayone, setRayone] = useState([]);
+  const [ausgewählteAusfälle, setAusgewählteAusfälle] = useState([]);
+  const [mitnahmeplan, setMitnahmeplan] = useState(null);
+  const [berechnet, setBerechnet] = useState(false);
+  const [berechnung, setBerechnung] = useState(false);
+  const [gespeichert, setGespeichert] = useState(false);
+  const [abwesenheiten, setAbwesenheiten] = useState([]);
+  const [manuelleModus, setManuelleModus] = useState(false);
+  const [mitarbeiterSuche, setMitarbeiterSuche] = useState('');
+
+  const monat = datum.substring(0, 7);
+
+  useEffect(() => {
+    api.get('/mitarbeiter').then(({ data }) => setMitarbeiter(data));
+    api.get('/rayone').then(({ data }) => setRayone(data));
+  }, []);
+
+  useEffect(() => {
+    setBerechnet(false);
+    setMitnahmeplan(null);
+    setGespeichert(false);
+    api.get('/abwesenheiten', { params: { datum } }).then(({ data }) => {
+      const ausfälle = data.filter(a => a.status !== 'anwesend');
+      setAbwesenheiten(ausfälle);
+      setAusgewählteAusfälle(ausfälle.map(a => a.mitarbeiter_id));
+    });
+  }, [datum]);
+
+  const toggleAusfall = (mitarbeiterId) => {
+    setAusgewählteAusfälle(prev =>
+      prev.includes(mitarbeiterId)
+        ? prev.filter(id => id !== mitarbeiterId)
+        : [...prev, mitarbeiterId]
+    );
+    setBerechnet(false);
+    setMitnahmeplan(null);
+  };
+
+  // Aktuellen Rayon eines Mitarbeiters ermitteln (aus Monatszuteilung oder Stamm)
+  const getMitarbeiterRayon = (m) => {
+    const nummer = m.aktueller_rayon_nummer || m.stamm_rayon_nummer;
+    if (!nummer) return null;
+    const nrStr = String(nummer).padStart(4, '0');
+    const gebiet = m.aktueller_rayon_gebiet || m.stamm_rayon_gebiet;
+    const bezeichnung = m.aktueller_rayon_bezeichnung || m.stamm_rayon_bezeichnung;
+    // Gebiet bevorzugen, sonst Bezeichnung (wenn sie nicht nur "Rayon XXXX" ist)
+    const ort = gebiet || (bezeichnung && bezeichnung !== `Rayon ${nrStr}` && bezeichnung !== `Rayon ${nummer}` ? bezeichnung : null);
+    return `Rayon ${nrStr}${ort ? ' – ' + ort : ''}`;
+  };
+
+  const handleBerechnen = async () => {
+    if (ausgewählteAusfälle.length === 0) return;
+    setBerechnung(true);
+    try {
+      const { data } = await api.post('/mitnahme/berechnen', {
+        datum,
+        ausfälle: ausgewählteAusfälle.map(id => ({ mitarbeiter_id: id })),
+      });
+      setMitnahmeplan(data.plan.map(p => ({ ...p, _art: p.art })));
+      setBerechnet(true);
+    } finally {
+      setBerechnung(false);
+    }
+  };
+
+  const handlePlanEintragAnpassen = (index, feld, wert) => {
+    setMitnahmeplan(prev => {
+      const neu = [...prev];
+      neu[index] = { ...neu[index], [feld]: wert };
+      // Art aktualisiert → ist_teilbesetzung synchronisieren
+      if (feld === '_art') {
+        neu[index].ist_teilbesetzung = wert === 'teilmitnahme' ? 1 : 0;
+      }
+      return neu;
+    });
+  };
+
+  const handleSpeichern = async () => {
+    if (!mitnahmeplan) return;
+
+    const eintraege = mitnahmeplan
+      .filter(p => p.vertreter_id)
+      .map(p => ({
+        rayon_id: p.rayon_id,
+        mitarbeiter_id: p.vertreter_id,
+        ist_vertretung: true,
+        ist_teilbesetzung: p._art === 'teilmitnahme',
+        vertritt_mitarbeiter_id: p.ausgefallener_mitarbeiter_id || null,
+      }));
+
+    try {
+      await api.post(`/tagesplan/${datum}/speichern`, { eintraege });
+      setGespeichert(true);
+    } catch (err) {
+      alert('Fehler beim Speichern: ' + (err?.response?.data?.fehler || err.message));
+    }
+  };
+
+  const mitarbeiterMitStatus = mitarbeiter.map(m => {
+    const abwesenheit = abwesenheiten.find(a => a.mitarbeiter_id === m.id);
+    return { ...m, abwesenheit, istAusgefallen: ausgewählteAusfälle.includes(m.id) };
+  });
+
+  // Mitarbeiter die keine Mitnahme haben
+  const keineMitnahme = mitarbeiter.filter(m => m.mitnahme_modus === 'keine');
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Mitnahmeplanung</h1>
+          <p className="text-gray-500 mt-1">Optimale Mitnahmen automatisch berechnen oder manuell zuteilen</p>
+        </div>
+        <MonthPicker value={datum} onChange={setDatum} mode="date" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Linke Seite: Ausfälle auswählen */}
+        <div>
+          <div className="card mb-4">
+            <h2 className="font-semibold text-gray-900 mb-1">
+              Schritt 1: Abwesende markieren
+            </h2>
+            <p className="text-gray-500 text-sm mb-4">
+              Welche Mitarbeiter fehlen am {formatDatumLang(datum)}?
+              Bereits eingetragene Abwesenheiten sind vorausgewählt.
+            </p>
+
+            <div className="space-y-1 max-h-96 overflow-y-auto">
+              {mitarbeiterMitStatus.map((m) => {
+                const rayonAnzeige = getMitarbeiterRayon(m);
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => toggleAusfall(m.id)}
+                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${
+                      m.istAusgefallen
+                        ? 'bg-red-50 border-2 border-red-300'
+                        : 'hover:bg-gray-50 border-2 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                        m.istAusgefallen ? 'bg-red-500 border-red-500' : 'border-gray-300'
+                      }`}>
+                        {m.istAusgefallen && <CheckIcon className="w-3 h-3 text-white" />}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">{m.name}</div>
+                        {rayonAnzeige && (
+                          <div className="text-xs text-gray-500">{rayonAnzeige}</div>
+                        )}
+                        {m.mitnahme_modus === 'keine' && (
+                          <div className="text-xs text-orange-500">Keine Mitnahme</div>
+                        )}
+                        {m.mitnahme_modus === 'teilweise' && (
+                          <div className="text-xs text-blue-500">Nur Teilmitnahme</div>
+                        )}
+                      </div>
+                    </div>
+                    {m.abwesenheit && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        m.abwesenheit.status === 'krank' ? 'bg-red-100 text-red-700' :
+                        m.abwesenheit.status === 'urlaub' ? 'bg-blue-100 text-blue-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
+                        {m.abwesenheit.status}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">
+              {ausgewählteAusfälle.length} Ausfall{ausgewählteAusfälle.length !== 1 ? 'fälle' : ''} ausgewählt
+            </span>
+            <button
+              onClick={handleBerechnen}
+              disabled={ausgewählteAusfälle.length === 0 || berechnung}
+              className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              {berechnung ? 'Berechne...' : 'Mitnahmen berechnen'}
+            </button>
+          </div>
+        </div>
+
+        {/* Rechte Seite: Ergebnis */}
+        <div>
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-900">
+                Schritt 2: Mitnahmeplan
+              </h2>
+              {berechnet && (
+                <button
+                  onClick={() => { setManuelleModus(!manuelleModus); setMitarbeiterSuche(''); }}
+                  className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
+                    manuelleModus ? 'bg-yellow-100 text-yellow-800' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <PencilSquareIcon className="w-3.5 h-3.5" />
+                  {manuelleModus ? 'Manuell aktiv' : 'Manuell bearbeiten'}
+                </button>
+              )}
+            </div>
+
+            {/* Suchfeld im manuellen Modus */}
+            {berechnet && manuelleModus && (
+              <div className="relative mb-3">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  className="input pl-9 text-sm"
+                  placeholder="Mitarbeiter nach Name oder Nr. suchen..."
+                  value={mitarbeiterSuche}
+                  onChange={(e) => setMitarbeiterSuche(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+            )}
+
+            {!berechnet && (
+              <div className="text-center py-12 text-gray-400">
+                <ArrowsRightLeftIcon className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm">
+                  Markieren Sie Ausfälle und klicken Sie auf "Mitnahmen berechnen"
+                </p>
+              </div>
+            )}
+
+            {berechnet && mitnahmeplan && (
+              <div className="space-y-3">
+                {mitnahmeplan.map((p, i) => {
+                  const gefilterteMitarbeiter = mitarbeiterSuche
+                    ? mitarbeiter.filter(m => {
+                        const q = mitarbeiterSuche.toLowerCase();
+                        return m.name.toLowerCase().includes(q) || m.personalnummer.includes(mitarbeiterSuche);
+                      })
+                    : mitarbeiter;
+                  return (
+                  <MitnahmeEintrag
+                    key={i}
+                    eintrag={p}
+                    index={i}
+                    manuelleModus={manuelleModus}
+                    mitarbeiter={gefilterteMitarbeiter}
+                    rayone={rayone}
+                    onAnpassen={handlePlanEintragAnpassen}
+                  />
+                  );
+                })}
+
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  {gespeichert ? (
+                    <div className="flex items-center gap-2 text-green-600 font-medium">
+                      <CheckCircleIcon className="w-5 h-5" />
+                      Tagesplan wurde gespeichert!
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <p className="text-sm text-gray-500">Plan überprüfen und bestätigen:</p>
+                      <button onClick={handleSpeichern} className="btn-primary">
+                        Plan bestätigen & speichern
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Kompetenz-Hinweis */}
+          {berechnet && (
+            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-green-100 text-green-800 rounded text-center font-bold leading-4">2</span>
+                kennt Rayon gut
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-orange-100 text-orange-800 rounded text-center font-bold leading-4">3</span>
+                kennt Rayon mäßig
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MitnahmeEintrag({ eintrag, index, manuelleModus, mitarbeiter, rayone, onAnpassen }) {
+  const hatVertreter = !!eintrag.vertreter_id;
+  const art = eintrag._art || eintrag.art || 'vollmitnahme';
+  const istTeilmitnahme = art === 'teilmitnahme';
+
+  return (
+    <div className={`rounded-lg border-2 p-3 ${
+      !hatVertreter ? 'border-red-200 bg-red-50' :
+      istTeilmitnahme ? 'border-yellow-200 bg-yellow-50' :
+      eintrag.kompetenz_level === 2 ? 'border-green-200 bg-green-50' :
+      'border-orange-200 bg-orange-50'
+    }`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="font-semibold text-sm text-gray-900">
+            {eintrag.rayon_nummer} – {eintrag.rayon_bezeichnung}
+          </div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            Abwesend: <span className="font-medium text-red-600">{eintrag.ausgefallener_name}</span>
+          </div>
+        </div>
+        {eintrag.kompetenz_level && (
+          <span className={`text-xs px-2 py-0.5 rounded font-bold ${
+            eintrag.kompetenz_level === 2 ? 'bg-green-200 text-green-800' : 'bg-orange-200 text-orange-800'
+          }`}>
+            L{eintrag.kompetenz_level}
+          </span>
+        )}
+      </div>
+
+      {manuelleModus ? (
+        /* Manuelle Bearbeitung */
+        <div className="mt-2 space-y-2">
+          <div>
+            <label className="text-xs text-gray-500">Mitarbeiter:</label>
+            <SearchableSelect
+              options={mitarbeiter.map(m => ({ id: m.id, label: m.name }))}
+              value={eintrag.vertreter_id || ''}
+              onChange={id => onAnpassen(index, 'vertreter_id', id ? parseInt(id) : null)}
+              emptyLabel="– Kein Mitarbeiter –"
+              searchPlaceholder="Name suchen..."
+              className="mt-0.5"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Art der Mitnahme:</label>
+            <select
+              className="input text-sm mt-0.5"
+              value={art}
+              onChange={e => onAnpassen(index, '_art', e.target.value)}
+            >
+              <option value="vollmitnahme">Vollmitnahme (eigener Rayon unbesetzt)</option>
+              <option value="teilmitnahme">Teilmitnahme (eigener Rayon bleibt besetzt)</option>
+            </select>
+          </div>
+        </div>
+      ) : (
+        /* Anzeige-Modus */
+        hatVertreter ? (
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <ArrowsRightLeftIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
+              <span className="font-semibold text-sm text-gray-900">{eintrag.vertreter_name}</span>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                istTeilmitnahme ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+              }`}>
+                {istTeilmitnahme ? 'Teilmitnahme' : 'Vollmitnahme'}
+              </span>
+            </div>
+            {!istTeilmitnahme && eintrag.eigener_rayon_unbesetzt && (
+              <div className="mt-1 ml-5 text-xs text-orange-700 flex items-center gap-1">
+                <ExclamationCircleIcon className="w-3.5 h-3.5" />
+                <span>Eigener Rayon wird unbesetzt</span>
+              </div>
+            )}
+            {istTeilmitnahme && (
+              <div className="mt-1 ml-5 text-xs text-blue-700">
+                Eigener Rayon bleibt besetzt
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-2 flex items-center gap-2 text-red-600">
+            <ExclamationCircleIcon className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm font-medium">
+              {eintrag.fehler || 'Kein geeigneter Mitarbeiter verfügbar!'}
+            </span>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/RayonDetail.jsx', '''\
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeftIcon, PencilIcon, CheckIcon, XMarkIcon, UserPlusIcon, MagnifyingGlassIcon, TrashIcon, PlusIcon, MapIcon } from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+import { kompetenzLabel, kompetenzBadgeClass } from '../utils/helpers.js';
+
+export default function RayonDetail() {
+  const { id } = useParams();
+  const [rayon, setRayon] = useState(null);
+  const [laden, setLaden] = useState(true);
+  const [bearbeiteModus, setBearbeiteModus] = useState(false);
+  const [formDaten, setFormDaten] = useState({});
+  const [zuweisungsModalOffen, setZuweisungsModalOffen] = useState(false);
+  const [kompetenzModalLevel, setKompetenzModalLevel] = useState(null); // 1 oder 2
+
+  const monat = new Date().toISOString().substring(0, 7);
+
+  const laden_ = async () => {
+    const { data } = await api.get(`/rayone/${id}`, { params: { monat } });
+    setRayon(data);
+    setFormDaten({
+      bezeichnung: data.bezeichnung,
+      gebiet: data.gebiet || '',
+      priorität: data.priorität ?? 'normal',
+    });
+    setLaden(false);
+  };
+
+  useEffect(() => { laden_(); }, [id]);
+
+  const handleSpeichern = async () => {
+    await api.put(`/rayone/${id}`, formDaten);
+    await laden_();
+    setBearbeiteModus(false);
+  };
+
+  if (laden || !rayon) return <div className="flex items-center justify-center h-64 text-gray-400">Laden...</div>;
+
+  const aktuellebesetzung = rayon.aktuelle_besetzung || [];
+  const stammBesetzung = rayon.stamm_besetzung || [];
+  const vertreterLevel2 = rayon.mitarbeiter?.filter(m => m.level === 2) || [];
+  const vertreterLevel3 = rayon.mitarbeiter?.filter(m => m.level === 3) || [];
+
+  return (
+    <div>
+      <div className="flex items-center gap-4 mb-6">
+        <Link to="/rayone" className="text-gray-400 hover:text-gray-600">
+          <ArrowLeftIcon className="w-5 h-5" />
+        </Link>
+        <div className="flex-1">
+          {bearbeiteModus ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <MapIcon className="w-5 h-5 text-yellow-600" />
+                </div>
+                <input
+                  className="input text-xl font-bold max-w-xs"
+                  placeholder="Rayonname / -nummer"
+                  value={formDaten.bezeichnung}
+                  onChange={(e) => setFormDaten({ ...formDaten, bezeichnung: e.target.value })}
+                  autoComplete="new-password"
+                />
+                <button onClick={handleSpeichern} className="text-green-600 hover:text-green-700">
+                  <CheckIcon className="w-5 h-5" />
+                </button>
+                <button onClick={() => setBearbeiteModus(false)} className="text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              <input
+                className="input text-sm max-w-xs"
+                placeholder="Ort/e (Gebiet)"
+                value={formDaten.gebiet}
+                onChange={(e) => setFormDaten({ ...formDaten, gebiet: e.target.value })}
+                autoComplete="new-password"
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500">Priorität:</label>
+                <div className="flex gap-1">
+                  {[
+                    { value: 'wenig', label: 'Wenig', cls: 'bg-gray-200 text-gray-700', activeCls: 'bg-gray-500 text-white' },
+                    { value: 'normal', label: 'Normal', cls: 'bg-yellow-100 text-yellow-800', activeCls: 'bg-yellow-400 text-gray-900' },
+                    { value: 'hoch', label: 'Hoch', cls: 'bg-red-100 text-red-700', activeCls: 'bg-red-500 text-white' },
+                  ].map(p => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setFormDaten({ ...formDaten, priorität: p.value })}
+                      className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${formDaten.priorität === p.value ? p.activeCls : p.cls + ' hover:opacity-80'}`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <MapIcon className="w-5 h-5 text-yellow-600" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-gray-900">{rayon.bezeichnung}</h1>
+                  <button onClick={() => setBearbeiteModus(true)} className="text-gray-400 hover:text-yellow-600">
+                    <PencilIcon className="w-4 h-4" />
+                  </button>
+                </div>
+                {rayon.gebiet && <p className="text-gray-500 mt-0.5">{rayon.gebiet}</p>}
+                {stammBesetzung.length > 0 && (
+                  <p className="text-xs text-green-700 mt-0.5">
+                    Stammzusteller: {stammBesetzung.map(s => s.mitarbeiter_name).join(', ')}
+                  </p>
+                )}
+                <p className="text-xs mt-0.5">
+                  {(() => {
+                    const p = rayon.priorität || 'normal';
+                    const cfg = { wenig: 'text-gray-400', normal: 'text-yellow-600', hoch: 'text-red-500 font-medium' };
+                    return <span className={cfg[p] || 'text-gray-400'}>Priorität: {p.charAt(0).toUpperCase() + p.slice(1)}</span>;
+                  })()}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Aktuelle Besetzung */}
+        <div className="rounded-xl border-2 border-green-200 bg-green-50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-sm text-green-800">Aktuell besetzt</h3>
+            <button
+              onClick={() => setZuweisungsModalOffen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-100 hover:bg-green-200 text-green-700 text-xs font-medium transition-colors"
+              title="Anderen Mitarbeiter zuweisen"
+            >
+              <UserPlusIcon className="w-3.5 h-3.5" />
+              Zuweisen
+            </button>
+          </div>
+          {aktuellebesetzung.length === 0 ? (
+            <p className="text-gray-400 text-sm italic">Nicht besetzt</p>
+          ) : (
+            <div className="space-y-2">
+              {aktuellebesetzung.map((b) => (
+                <div key={b.mitarbeiter_id} className="flex items-center gap-2 text-sm group">
+                  <Link
+                    to={`/mitarbeiter/${b.mitarbeiter_id}`}
+                    className="flex items-center gap-2 flex-1 hover:underline"
+                  >
+                    <div className="w-7 h-7 bg-white rounded-full flex items-center justify-center border border-gray-200 text-xs font-semibold text-gray-700 flex-shrink-0">
+                      {b.mitarbeiter_name?.charAt(0)}
+                    </div>
+                    <div>
+                      <span className="text-gray-800">{b.mitarbeiter_name}</span>
+                      {b.ist_teilzuteilung ? (
+                        <span className="ml-1 text-xs text-yellow-600">(teilw.)</span>
+                      ) : null}
+                    </div>
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      await api.delete(`/monatszuteilungen/${monat}/${b.mitarbeiter_id}/${parseInt(id)}`);
+                      // Auch heutigen Tagesplan-Eintrag für diesen Rayon leeren,
+                      // damit der Mitarbeiter nicht weiter als "heute" angezeigt wird
+                      const heute = new Date().toISOString().split('T')[0];
+                      await api.post(`/tagesplan/${heute}/speichern`, {
+                        eintraege: [{
+                          rayon_id: parseInt(id),
+                          mitarbeiter_id: null,
+                          ist_vertretung: false,
+                          ist_teilbesetzung: false,
+                          vertritt_mitarbeiter_id: null,
+                          teilmitnahmen: [],
+                        }],
+                      });
+                      await laden_();
+                    }}
+                    className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Aus Rayon entfernen"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Vertreter Level 2 */}
+        <MitarbeiterGruppe
+          titel="Sehr gut (Level 2)"
+          mitarbeiter={vertreterLevel2}
+          farbe="blue"
+          onHinzufuegen={() => setKompetenzModalLevel(2)}
+          rayonId={parseInt(id)}
+          onEntfernen={laden_}
+        />
+
+        {/* Vertreter Level 3 */}
+        <MitarbeiterGruppe
+          titel="Geht so (Level 3)"
+          mitarbeiter={vertreterLevel3}
+          farbe="orange"
+          onHinzufuegen={() => setKompetenzModalLevel(3)}
+          rayonId={parseInt(id)}
+          onEntfernen={laden_}
+        />
+      </div>
+
+      {/* Zuweisungs-Modal */}
+      {zuweisungsModalOffen && (
+        <ZuweisungsModal
+          rayonId={parseInt(id)}
+          monat={monat}
+          onClose={() => setZuweisungsModalOffen(false)}
+          onSaved={() => { setZuweisungsModalOffen(false); laden_(); }}
+        />
+      )}
+
+      {/* Kompetenz hinzufügen Modal */}
+      {kompetenzModalLevel && (
+        <KompetenzHinzufuegenModal
+          rayonId={parseInt(id)}
+          level={kompetenzModalLevel}
+          vorhandene={rayon.mitarbeiter || []}
+          onClose={() => setKompetenzModalLevel(null)}
+          onSaved={() => { setKompetenzModalLevel(null); laden_(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ZuweisungsModal({ rayonId, monat, onClose, onSaved }) {
+  const [mitarbeiter, setMitarbeiter] = useState([]);
+  const [suche, setSuche] = useState('');
+  const [ausgewaehlt, setAusgewaehlt] = useState('');
+  const [istTeilzuteilung, setIstTeilzuteilung] = useState(false);
+  const [speichern, setSpeichern] = useState(false);
+  const [fehler, setFehler] = useState('');
+  const [kannErzwingen, setKannErzwingen] = useState(false);
+
+  useEffect(() => {
+    api.get('/mitarbeiter').then(({ data }) => setMitarbeiter(data));
+  }, []);
+
+  const gefiltert = mitarbeiter.filter(m =>
+    m.name.toLowerCase().includes(suche.toLowerCase()) ||
+    m.personalnummer.includes(suche)
+  );
+
+  const handleSpeichern = async (force = false) => {
+    if (!ausgewaehlt) return;
+    setSpeichern(true);
+    setFehler('');
+    setKannErzwingen(false);
+    try {
+      await api.put(`/monatszuteilungen/${monat}/rayon/${rayonId}`, {
+        mitarbeiter_id: parseInt(ausgewaehlt),
+        ist_teilzuteilung: istTeilzuteilung ? 1 : 0,
+        force,
+      });
+      // Auch Tagesplan für heute aktualisieren
+      const heute = new Date().toISOString().split('T')[0];
+      await api.post(`/tagesplan/${heute}/speichern`, {
+        eintraege: [{
+          rayon_id: rayonId,
+          mitarbeiter_id: parseInt(ausgewaehlt),
+          ist_vertretung: false,
+          ist_teilbesetzung: istTeilzuteilung,
+          vertritt_mitarbeiter_id: null,
+          teilmitnahmen: [],
+        }],
+      });
+      onSaved();
+    } catch (err) {
+      const data = err?.response?.data;
+      setFehler(data?.fehler || 'Speichern fehlgeschlagen');
+      setKannErzwingen(!!data?.kannErzwingen);
+      setSpeichern(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Mitarbeiter zuweisen</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              className="input pl-9 text-sm"
+              placeholder="Name oder Personalnummer suchen..."
+              value={suche}
+              onChange={e => setSuche(e.target.value)}
+              autoFocus
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
+              readOnly
+              onFocus={e => { e.target.readOnly = false; }}
+            />
+          </div>
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+            {gefiltert.map(m => (
+              <div
+                key={m.id}
+                onClick={() => { setAusgewaehlt(String(m.id)); setFehler(''); setKannErzwingen(false); }}
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer text-sm border-b border-gray-50 last:border-0 ${
+                  ausgewaehlt === String(m.id) ? 'bg-yellow-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  ausgewaehlt === String(m.id) ? 'bg-yellow-500 border-yellow-500' : 'border-gray-300'
+                }`}>
+                  {ausgewaehlt === String(m.id) && <CheckIcon className="w-3 h-3 text-white" />}
+                </div>
+                <div>
+                  <div className="font-medium">{m.name}</div>
+                  <div className="text-xs text-gray-400">Nr. {m.personalnummer}</div>
+                </div>
+              </div>
+            ))}
+            {gefiltert.length === 0 && (
+              <div className="text-center py-4 text-gray-400 text-sm">Keine Mitarbeiter gefunden</div>
+            )}
+          </div>
+        </div>
+        <div className="px-5 pb-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={istTeilzuteilung}
+              onChange={(e) => setIstTeilzuteilung(e.target.checked)}
+              className="rounded"
+            />
+            Teilbesetzung (zusätzlich zu bestehendem Rayon)
+          </label>
+          {fehler && (
+            <div className="mt-2 space-y-1">
+              <div className="text-red-600 text-sm">{fehler}</div>
+              {kannErzwingen && (
+                <button
+                  onClick={() => handleSpeichern(true)}
+                  className="text-sm text-orange-600 hover:text-orange-800 font-medium underline"
+                >
+                  Trotzdem zuweisen (bisherige Ganzmitnahme ersetzen)
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-secondary">Abbrechen</button>
+          <button
+            onClick={() => handleSpeichern(false)}
+            disabled={!ausgewaehlt || speichern}
+            className="btn-primary disabled:opacity-50"
+          >
+            {speichern ? 'Speichere...' : 'Zuweisen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KompetenzHinzufuegenModal({ rayonId, level, vorhandene, onClose, onSaved }) {
+  const [mitarbeiter, setMitarbeiter] = useState([]);
+  const [suche, setSuche] = useState('');
+  const [ausgewaehlt, setAusgewaehlt] = useState('');
+  const [speichern, setSpeichern] = useState(false);
+
+  useEffect(() => {
+    api.get('/mitarbeiter').then(({ data }) => setMitarbeiter(data));
+  }, []);
+
+  const vorhandeneIds = new Set(vorhandene.map(m => m.id));
+  const gefiltert = mitarbeiter.filter(m =>
+    !vorhandeneIds.has(m.id) &&
+    (m.name.toLowerCase().includes(suche.toLowerCase()) || m.personalnummer.includes(suche))
+  );
+
+  const handleSpeichern = async () => {
+    if (!ausgewaehlt) return;
+    setSpeichern(true);
+    await api.post('/kompetenzen', { mitarbeiter_id: parseInt(ausgewaehlt), rayon_id: rayonId, level });
+    onSaved();
+  };
+
+  const levelLabel = level === 1 ? 'Level 1 – Stamm' : level === 2 ? 'Level 2 – Sehr gut' : 'Level 3 – Geht so';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">Mitarbeiter hinzufügen – {levelLabel}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XMarkIcon className="w-5 h-5" /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="relative">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" className="input pl-9 text-sm" placeholder="Name oder Personalnummer suchen..."
+              value={suche} onChange={e => setSuche(e.target.value)} autoFocus
+              autoComplete="new-password" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              data-lpignore="true" data-form-type="other"
+              readOnly onFocus={e => { e.target.readOnly = false; }} />
+          </div>
+          <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+            {gefiltert.map(m => (
+              <div key={m.id} onClick={() => setAusgewaehlt(String(m.id))}
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer text-sm border-b border-gray-50 last:border-0 ${ausgewaehlt === String(m.id) ? 'bg-yellow-50' : 'hover:bg-gray-50'}`}>
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${ausgewaehlt === String(m.id) ? 'bg-yellow-500 border-yellow-500' : 'border-gray-300'}`}>
+                  {ausgewaehlt === String(m.id) && <CheckIcon className="w-3 h-3 text-white" />}
+                </div>
+                <div>
+                  <div className="font-medium">{m.name}</div>
+                  <div className="text-xs text-gray-400">Nr. {m.personalnummer}</div>
+                </div>
+              </div>
+            ))}
+            {gefiltert.length === 0 && <div className="text-center py-4 text-gray-400 text-sm">Keine weiteren Mitarbeiter</div>}
+          </div>
+        </div>
+        <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="btn-secondary">Abbrechen</button>
+          <button onClick={handleSpeichern} disabled={!ausgewaehlt || speichern} className="btn-primary disabled:opacity-50">
+            {speichern ? 'Speichere...' : 'Hinzufügen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MitarbeiterGruppe({ titel, mitarbeiter, farbe, onHinzufuegen, rayonId, onEntfernen }) {
+  const farben = {
+    blue: 'border-blue-200 bg-blue-50',
+    orange: 'border-orange-200 bg-orange-50',
+  };
+  const titelFarben = {
+    blue: 'text-blue-800',
+    orange: 'text-orange-800',
+  };
+  const btnFarben = {
+    blue: 'bg-blue-100 hover:bg-blue-200 text-blue-700',
+    orange: 'bg-orange-100 hover:bg-orange-200 text-orange-700',
+  };
+
+  const monat = new Date().toISOString().substring(0, 7);
+
+  return (
+    <div className={`rounded-xl border-2 ${farben[farbe]} p-4`}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className={`font-semibold text-sm ${titelFarben[farbe]}`}>{titel}</h3>
+        {onHinzufuegen && (
+          <button onClick={onHinzufuegen}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${btnFarben[farbe]}`}>
+            <PlusIcon className="w-3.5 h-3.5" />
+            Hinzufügen
+          </button>
+        )}
+      </div>
+      {mitarbeiter.length === 0 ? (
+        <p className="text-gray-400 text-sm italic">Niemand erfasst</p>
+      ) : (
+        <div className="space-y-2">
+          {mitarbeiter.map((m) => (
+            <div key={m.id} className="flex items-center gap-2 text-sm group">
+              <Link to={`/mitarbeiter/${m.id}`} className="flex items-center gap-2 flex-1 hover:underline">
+                <div className="w-7 h-7 bg-white rounded-full flex items-center justify-center border border-gray-200 text-xs font-semibold text-gray-700 flex-shrink-0">
+                  {m.name.charAt(0)}
+                </div>
+                <span className="text-gray-800">{m.name}</span>
+              </Link>
+              {onEntfernen && (
+                <button
+                  onClick={async () => {
+                    await api.delete(`/kompetenzen/${m.id}/${rayonId}`);
+                    onEntfernen();
+                  }}
+                  className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Entfernen"
+                >
+                  <TrashIcon className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/pages/Statistik.jsx', '''\
+import React, { useState, useEffect } from 'react';
+import { ChartBarIcon } from '@heroicons/react/24/outline';
+import api from '../utils/api.js';
+
+export default function Statistik() {
+  const [statistik, setStatistik] = useState([]);
+  const [laden, setLaden] = useState(true);
+  const [monat, setMonat] = useState(new Date().toISOString().substring(0, 7));
+  const [sortierung, setSortierung] = useState('monat');
+
+  const laden_ = async () => {
+    setLaden(true);
+    const { data } = await api.get('/statistik', {
+      params: { monat, jahr: monat.substring(0, 4) }
+    });
+    setStatistik(data);
+    setLaden(false);
+  };
+
+  useEffect(() => { laden_(); }, [monat]);
+
+  const sortiert = [...statistik].sort((a, b) => {
+    if (sortierung === 'monat') return b.einsätze_monat - a.einsätze_monat;
+    if (sortierung === 'jahr') return b.einsätze_jahr - a.einsätze_jahr;
+    return a.name.localeCompare(b.name);
+  });
+
+  const maxMonat = Math.max(...statistik.map(s => s.einsätze_monat), 1);
+  const maxJahr = Math.max(...statistik.map(s => s.einsätze_jahr), 1);
+
+  if (laden) return <div className="flex items-center justify-center h-64 text-gray-400">Laden...</div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Fairness-Statistik</h1>
+          <p className="text-gray-500 mt-1">Mitnahmeeinsätze pro Mitarbeiter</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+            {new Date().toLocaleDateString('de-AT', { month: 'long', year: 'numeric' })}
+          </span>
+          <select
+            className="input w-auto"
+            value={sortierung}
+            onChange={(e) => setSortierung(e.target.value)}
+          >
+            <option value="monat">Sortierung: Diesen Monat</option>
+            <option value="jahr">Sortierung: Dieses Jahr</option>
+            <option value="name">Sortierung: Name</option>
+          </select>
+        </div>
+      </div>
+
+      {statistik.every(s => s.einsätze_monat === 0 && s.einsätze_jahr === 0) && (
+        <div className="card text-center py-8 mb-6 text-gray-400">
+          <ChartBarIcon className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+          <p>Noch keine Mitnahmeeinsätze erfasst.</p>
+          <p className="text-sm mt-1">Einsätze werden gespeichert wenn Sie Tagespläne über die Mitnahmeplanung bestätigen.</p>
+        </div>
+      )}
+
+      <div className="card overflow-hidden p-0">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Mitarbeiter</th>
+              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Monat</th>
+              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Jahr</th>
+              <th className="px-4 py-3 hidden md:table-cell"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortiert.map((s, i) => (
+              <tr key={s.id} className={`border-b border-gray-50 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-50/50'}`}>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-yellow-700 font-bold text-xs">{s.name.charAt(0)}</span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm text-gray-900">{s.name}</div>
+                      <div className="text-xs text-gray-400">Nr. {s.personalnummer}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <td className="px-4 py-3 text-center">
+                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
+                    s.einsätze_monat === 0 ? 'bg-gray-100 text-gray-400' :
+                    s.einsätze_monat <= 2 ? 'bg-green-100 text-green-700' :
+                    s.einsätze_monat <= 5 ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-red-100 text-red-700'
+                  }`}>
+                    {s.einsätze_monat}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <span className={`text-sm font-semibold ${
+                    s.einsätze_jahr === 0 ? 'text-gray-400' : 'text-gray-800'
+                  }`}>
+                    {s.einsätze_jahr}
+                  </span>
+                </td>
+                <td className="px-4 py-3 hidden md:table-cell">
+                  <div className="w-32">
+                    <div className="text-xs text-gray-400 mb-0.5">Monat</div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-yellow-400 rounded-full transition-all"
+                        style={{ width: `${(s.einsätze_monat / maxMonat) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Erklärung */}
+      <div className="mt-4 text-xs text-gray-400 flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-green-100 border border-green-300"></div>
+          0–2 Einsätze
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-yellow-100 border border-yellow-300"></div>
+          3–5 Einsätze
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-red-100 border border-red-300"></div>
+          6+ Einsätze
+        </div>
+      </div>
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/components/Layout.jsx', '''\
+import React, { useState } from 'react';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../App.jsx';
+import {
+  HomeIcon,
+  UsersIcon,
+  MapIcon,
+  CalendarDaysIcon,
+  CalendarIcon,
+  ArrowsRightLeftIcon,
+  ChartBarIcon,
+  TruckIcon,
+  Bars3Icon,
+  XMarkIcon,
+  ArrowRightOnRectangleIcon,
+  ShieldCheckIcon,
+  ClipboardDocumentListIcon,
+  TableCellsIcon,
+} from '@heroicons/react/24/outline';
+
+const navigation = [
+  { name: 'Dashboard', href: '/', icon: HomeIcon },
+  { name: 'Tagesplan', href: '/tagesplan', icon: CalendarDaysIcon },
+  { name: 'Jahreskalender', href: '/jahreskalender', icon: CalendarIcon },
+  { name: 'Mitnahmeplanung', href: '/mitnahme', icon: ArrowsRightLeftIcon },
+  { name: 'Mitarbeiter', href: '/mitarbeiter', icon: UsersIcon },
+  { name: 'Rayone', href: '/rayone', icon: MapIcon },
+  { name: 'Fahrzeuge', href: '/fahrzeuge', icon: TruckIcon },
+  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: TableCellsIcon },
+  { name: 'Statistik', href: '/statistik', icon: ChartBarIcon },
+];
+
+const adminNavigation = [
+  { name: 'Benutzerverwaltung', href: '/benutzer', icon: ShieldCheckIcon },
+  { name: 'Audit-Log', href: '/audit-log', icon: ClipboardDocumentListIcon },
+];
+
+export default function Layout() {
+  const { auth, logout } = useAuth();
+  const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const istAdmin = auth?.benutzer?.rolle === 'admin';
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const Sidebar = ({ mobile = false }) => (
+    <div className={`flex flex-col h-full ${mobile ? '' : 'w-64'}`}>
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-6 py-5 border-b border-yellow-500">
+        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center font-bold text-yellow-600 text-lg shadow">
+          P
+        </div>
+        <div>
+          <div className="font-bold text-white text-sm">Post</div>
+          <div className="text-yellow-200 text-xs">Rayon-Verwaltung</div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {navigation.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.href}
+            end={item.href === '/'}
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                isActive
+                  ? 'bg-yellow-400 text-gray-900'
+                  : 'text-yellow-100 hover:bg-yellow-700 hover:text-white'
+              }`
+            }
+          >
+            <item.icon className="w-5 h-5 flex-shrink-0" />
+            {item.name}
+          </NavLink>
+        ))}
+
+        {/* Admin-only Navigation */}
+        {istAdmin && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+              <div className="text-yellow-400/60 text-xs font-semibold uppercase tracking-wide">Administration</div>
+            </div>
+            {adminNavigation.map((item) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={() => setSidebarOpen(false)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                    isActive
+                      ? 'bg-yellow-400 text-gray-900'
+                      : 'text-yellow-100 hover:bg-yellow-700 hover:text-white'
+                  }`
+                }
+              >
+                <item.icon className="w-5 h-5 flex-shrink-0" />
+                {item.name}
+              </NavLink>
+            ))}
+          </>
+        )}
+      </nav>
+
+      {/* Benutzer-Info */}
+      <div className="px-3 py-4 border-t border-yellow-700">
+        <div className="flex items-center gap-3 px-3 py-2 text-yellow-100 text-sm">
+          <div className="w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center text-gray-900 font-bold text-xs">
+            {auth?.benutzer?.name?.charAt(0) || 'A'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-medium truncate">{auth?.benutzer?.name}</div>
+            <div className="text-yellow-300 text-xs">
+              {auth?.benutzer?.rolle === 'admin' ? 'Administrator' : 'Schichtleiter'}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 w-full px-3 py-2 mt-1 text-yellow-200 hover:text-white hover:bg-yellow-700 rounded-lg text-sm transition-colors"
+        >
+          <ArrowRightOnRectangleIcon className="w-4 h-4" />
+          Abmelden
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Desktop Sidebar */}
+      <div className="hidden md:flex md:flex-shrink-0">
+        <div className="w-64 bg-yellow-600 flex flex-col">
+          <Sidebar />
+        </div>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-72 bg-yellow-600 shadow-xl">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute top-4 right-4 text-white hover:text-yellow-200"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+            <Sidebar mobile />
+          </div>
+        </div>
+      )}
+
+      {/* Hauptinhalt */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Mobile Header */}
+        <div className="md:hidden bg-yellow-600 px-4 py-3 flex items-center gap-3 shadow">
+          <button onClick={() => setSidebarOpen(true)} className="text-white">
+            <Bars3Icon className="w-6 h-6" />
+          </button>
+          <span className="text-white font-semibold">Rayon-Verwaltung</span>
+        </div>
+
+        {/* Seiten-Inhalt */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/components/MonthPicker.jsx', '''\
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+
+const MONATE = ['Jän', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const WOCHENTAGE = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+export default function MonthPicker({ value, onChange, mode = 'month' }) {
+  const [offen, setOffen] = useState(false);
+  const [ansicht, setAnsicht] = useState(() => {
+    const [j, m] = (value || new Date().toISOString().substring(0, 7)).split('-').map(Number);
+    return { jahr: j, monat: m };
+  });
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOffen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  useEffect(() => {
+    if (value) {
+      const [j, m] = value.split('-').map(Number);
+      setAnsicht({ jahr: j, monat: m || 1 });
+    }
+  }, [value]);
+
+  const vorMonat = () => setAnsicht(a => a.monat === 1 ? { jahr: a.jahr - 1, monat: 12 } : { ...a, monat: a.monat - 1 });
+  const nachMonat = () => setAnsicht(a => a.monat === 12 ? { jahr: a.jahr + 1, monat: 1 } : { ...a, monat: a.monat + 1 });
+  const vorJahr = () => setAnsicht(a => ({ ...a, jahr: a.jahr - 1 }));
+  const nachJahr = () => setAnsicht(a => ({ ...a, jahr: a.jahr + 1 }));
+
+  const waehleMonat = (m) => {
+    const val = `${ansicht.jahr}-${String(m).padStart(2, '0')}`;
+    onChange(val);
+    setOffen(false);
+  };
+
+  const waehleDatum = (datum) => {
+    onChange(datum);
+    setOffen(false);
+  };
+
+  const heute = new Date().toISOString().split('T')[0];
+  const heuteMonat = heute.substring(0, 7);
+
+  // Kalender-Tage für die Monatsansicht generieren
+  const kalenderTage = () => {
+    const ersterTag = new Date(ansicht.jahr, ansicht.monat - 1, 1);
+    const letzterTag = new Date(ansicht.jahr, ansicht.monat, 0);
+    let startWochentag = ersterTag.getDay(); // 0=So
+    startWochentag = startWochentag === 0 ? 6 : startWochentag - 1; // Mo=0
+
+    const tage = [];
+    // Tage des Vormonats
+    const vorMonatLetzer = new Date(ansicht.jahr, ansicht.monat - 1, 0).getDate();
+    for (let i = startWochentag - 1; i >= 0; i--) {
+      const t = vorMonatLetzer - i;
+      const m = ansicht.monat === 1 ? 12 : ansicht.monat - 1;
+      const j = ansicht.monat === 1 ? ansicht.jahr - 1 : ansicht.jahr;
+      tage.push({ tag: t, datum: `${j}-${String(m).padStart(2, '0')}-${String(t).padStart(2, '0')}`, aktuell: false });
+    }
+    // Tage des aktuellen Monats
+    for (let d = 1; d <= letzterTag.getDate(); d++) {
+      tage.push({ tag: d, datum: `${ansicht.jahr}-${String(ansicht.monat).padStart(2, '0')}-${String(d).padStart(2, '0')}`, aktuell: true });
+    }
+    // Tage des nächsten Monats
+    const rest = 42 - tage.length;
+    const nm = ansicht.monat === 12 ? 1 : ansicht.monat + 1;
+    const nj = ansicht.monat === 12 ? ansicht.jahr + 1 : ansicht.jahr;
+    for (let d = 1; d <= rest; d++) {
+      tage.push({ tag: d, datum: `${nj}-${String(nm).padStart(2, '0')}-${String(d).padStart(2, '0')}`, aktuell: false });
+    }
+    return tage;
+  };
+
+  const formatAnzeige = () => {
+    if (!value) return '—';
+    if (mode === 'month') {
+      const [j, m] = value.split('-').map(Number);
+      return `${MONATE[m - 1]} ${j}`;
+    }
+    // date mode
+    const [j, m, d] = value.split('-').map(Number);
+    return `${d}. ${MONATE[m - 1]} ${j}`;
+  };
+
+  const aktuellerMonatStr = `${ansicht.jahr}-${String(ansicht.monat).padStart(2, '0')}`;
+  const istAktuellerMonat = mode === 'month' && value === aktuellerMonatStr;
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        onClick={() => setOffen(!offen)}
+        className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-yellow-400 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-colors"
+      >
+        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+        </svg>
+        <span className="font-medium text-gray-700">{formatAnzeige()}</span>
+        <svg className={`w-3 h-3 text-gray-400 transition-transform ${offen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      {offen && (
+        <div className="absolute right-0 mt-1 z-50 bg-white rounded-xl shadow-2xl border border-gray-200 p-3 min-w-[280px]">
+          {/* Navigation */}
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={mode === 'month' ? vorJahr : vorMonat} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+              <ChevronLeftIcon className="w-4 h-4 text-gray-600" />
+            </button>
+            <span className="text-sm font-semibold text-gray-800">
+              {mode === 'month' ? ansicht.jahr : `${MONATE[ansicht.monat - 1]} ${ansicht.jahr}`}
+            </span>
+            <button onClick={mode === 'month' ? nachJahr : nachMonat} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+              <ChevronRightIcon className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
+
+          {mode === 'month' ? (
+            /* Monats-Grid */
+            <div className="grid grid-cols-3 gap-1">
+              {MONATE.map((name, i) => {
+                const mStr = `${ansicht.jahr}-${String(i + 1).padStart(2, '0')}`;
+                const istAktuell = value === mStr;
+                const istHeute = heuteMonat === mStr;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => waehleMonat(i + 1)}
+                    className={`px-2 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      istAktuell
+                        ? 'bg-yellow-500 text-white shadow-sm'
+                        : istHeute
+                        ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-300'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* Tages-Kalender */
+            <>
+              <div className="grid grid-cols-7 mb-1">
+                {WOCHENTAGE.map(t => (
+                  <div key={t} className="text-center text-xs font-medium text-gray-400 py-1">{t}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {kalenderTage().map((t, i) => {
+                  const istGewaehlt = value === t.datum;
+                  const istHeute2 = heute === t.datum;
+                  const wochentag = new Date(t.datum).getDay();
+                  const istWochenende = wochentag === 0 || wochentag === 6;
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => waehleDatum(t.datum)}
+                      className={`w-9 h-9 rounded-lg text-sm flex items-center justify-center transition-colors ${
+                        istGewaehlt
+                          ? 'bg-yellow-500 text-white font-bold shadow-sm'
+                          : istHeute2
+                          ? 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-300 font-semibold'
+                          : !t.aktuell
+                          ? 'text-gray-300'
+                          : istWochenende
+                          ? 'text-red-400 hover:bg-red-50'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      {t.tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Heute-Button */}
+          <div className="mt-2 pt-2 border-t border-gray-100 flex justify-center">
+            <button
+              onClick={() => {
+                const h = new Date();
+                if (mode === 'month') {
+                  const val = h.toISOString().substring(0, 7);
+                  onChange(val);
+                  setAnsicht({ jahr: h.getFullYear(), monat: h.getMonth() + 1 });
+                } else {
+                  onChange(heute);
+                  setAnsicht({ jahr: h.getFullYear(), monat: h.getMonth() + 1 });
+                }
+                setOffen(false);
+              }}
+              className="text-xs text-yellow-600 hover:text-yellow-700 font-medium px-3 py-1 hover:bg-yellow-50 rounded-md transition-colors"
+            >
+              {mode === 'month' ? 'Aktueller Monat' : 'Heute'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+''')
+
+write_file('frontend/src/components/SearchableSelect.jsx', '''\
+import React, { useState, useRef, useEffect } from 'react';
+import { MagnifyingGlassIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+
+// options: [{ id, label, sublabel? }]
+// value: selected id (number or string or '')
+// onChange: (id) => void
+export function SearchableSelect({
+  options,
+  value,
+  onChange,
+  searchPlaceholder = 'Suchen...',
+  emptyLabel = '– Keine Auswahl –',
+  className = '',
+}) {
+  const [offen, setOffen] = useState(false);
+  const [suche, setSuche] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOffen(false);
+        setSuche('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // eslint-disable-next-line eqeqeq
+  const selected = options.find(o => o.id == value);
+  const gefiltert = suche
+    ? options.filter(o =>
+        o.label.toLowerCase().includes(suche.toLowerCase()) ||
+        (o.sublabel && o.sublabel.toLowerCase().includes(suche.toLowerCase()))
+      )
+    : options;
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button
+        type="button"
+        className="input w-full flex items-center justify-between gap-2 text-left"
+        onClick={() => setOffen(v => !v)}
+      >
+        <span className={selected ? 'text-gray-900' : 'text-gray-400 italic'}>
+          {selected ? selected.label : emptyLabel}
+        </span>
+        <ChevronDownIcon className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${offen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {offen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden" style={{ minWidth: '220px' }}>
+          <div className="p-2 border-b border-gray-100">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="search"
+                className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-yellow-400 [&::-webkit-search-cancel-button]:hidden"
+                placeholder={searchPlaceholder}
+                value={suche}
+                onChange={e => setSuche(e.target.value)}
+                autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                data-1p-ignore="true"
+                name={`search-${Math.random()}`}
+                readOnly
+                onFocus={e => { e.target.readOnly = false; e.target.setAttribute('autocomplete', 'off'); }}
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            <div
+              className={`px-3 py-2 text-sm cursor-pointer hover:bg-gray-50 ${!value ? 'bg-gray-50 font-medium text-gray-700' : 'text-gray-400 italic'}`}
+              onClick={() => { onChange(''); setOffen(false); setSuche(''); }}
+            >
+              {emptyLabel}
+            </div>
+            {gefiltert.map(o => (
+              <div
+                key={o.id}
+                // eslint-disable-next-line eqeqeq
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-yellow-50 ${value == o.id ? 'bg-yellow-50 font-semibold' : ''}`}
+                onClick={() => { onChange(o.id); setOffen(false); setSuche(''); }}
+              >
+                <div className="text-gray-900">{o.label}</div>
+                {o.sublabel && <div className="text-xs text-gray-400 mt-0.5">{o.sublabel}</div>}
+              </div>
+            ))}
+            {gefiltert.length === 0 && (
+              <div className="px-3 py-3 text-sm text-gray-400 text-center">Keine Ergebnisse</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+''')
+
 patch_file('backend/database.js',
   '  try { db.exec("ALTER TABLE benutzer ADD COLUMN rolle TEXT NOT NULL DEFAULT \'admin\'"); } catch {}',
   '  try { db.exec("ALTER TABLE benutzer ADD COLUMN rolle TEXT NOT NULL DEFAULT \'admin\'"); } catch {}\n\n  // Migration: abwesenheiten CHECK constraint um \'kur\' erweitern\n  try {\n    const tbl = db.prepare("SELECT sql FROM sqlite_master WHERE type=\'table\' AND name=\'abwesenheiten\'").get();\n    if (tbl && tbl.sql && !tbl.sql.includes("\'kur\'")) {\n      db.exec(`PRAGMA foreign_keys = OFF`);\n      db.exec(`CREATE TABLE abwesenheiten_mig (\n        id INTEGER PRIMARY KEY AUTOINCREMENT,\n        mitarbeiter_id INTEGER NOT NULL,\n        datum TEXT NOT NULL,\n        status TEXT NOT NULL CHECK(status IN (\'anwesend\', \'krank\', \'urlaub\', \'frei\', \'kur\', \'sonstige\')),\n        bemerkung TEXT,\n        UNIQUE(mitarbeiter_id, datum),\n        FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE\n      )`);\n      db.exec(\'INSERT OR IGNORE INTO abwesenheiten_mig SELECT * FROM abwesenheiten\');\n      db.exec(\'DROP TABLE abwesenheiten\');\n      db.exec(\'ALTER TABLE abwesenheiten_mig RENAME TO abwesenheiten\');\n      db.exec(`PRAGMA foreign_keys = ON`);\n    }\n  } catch (e) { console.error(\'Migration abwesenheiten kur:\', e.message); }'

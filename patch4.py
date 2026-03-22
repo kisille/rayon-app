@@ -6322,6 +6322,12 @@ patch_file('backend/server.js',
   '  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = { nummer: z.rayon_nummer, id: z.rayon_id };'
 )
 
+
+patch_file('backend/server.js',
+  'const frontendDist = process.env.FRONTEND_DIST;',
+  'const frontendDist = process.env.FRONTEND_DIST ? require("path").resolve(process.env.FRONTEND_DIST) : null;'
+)
+
 print()
 print("✅ Fertig! Jetzt neu bauen:")
 print("  cd ~/rayon-app")

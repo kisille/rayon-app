@@ -1383,7 +1383,7 @@ app.get('/api/dsgvo/export/:mitarbeiterId', authMiddleware, adminOnly, (req, res
 });
 
 // ─── Frontend-Serving (für Electron / Standalone) ────────────────────────────
-const frontendDist = process.env.FRONTEND_DIST;
+const frontendDist = process.env.FRONTEND_DIST ? require("path").resolve(process.env.FRONTEND_DIST) : null;
 if (frontendDist && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get(/^(?!\/api).*/, (req, res) => {

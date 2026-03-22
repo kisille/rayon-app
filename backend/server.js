@@ -57,7 +57,7 @@ if (!JWT_SECRET) {
 }
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-const erlaubteOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+const erlaubteOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3001')
   .split(',').map(o => o.trim());
 app.use(cors({
   origin: (origin, callback) => {

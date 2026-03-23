@@ -43,6 +43,19 @@
   .badge-frei {
     @apply bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded-full;
   }
+  .badge-kur {
+    @apply bg-teal-100 text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full;
+  }
+}
+
+/* Touch-friendly tap targets – minimum 44px for interactive elements on mobile */
+@media (max-width: 768px) {
+  .btn-primary, .btn-secondary, .btn-danger {
+    @apply min-h-[44px];
+  }
+  button, a[role="button"] {
+    min-height: 36px;
+  }
 }
 
 /* Force light color scheme for text inputs – prevents dark OS autocomplete/dropdown UI */
@@ -71,6 +84,11 @@ input:-webkit-autofill:focus {
   -webkit-text-fill-color: inherit !important;
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
@@ -96,4 +114,5 @@ input:-webkit-autofill:focus {
   .badge-krank { background: #fee2e2 !important; color: #991b1b !important; }
   .badge-urlaub { background: #dbeafe !important; color: #1e40af !important; }
   .badge-frei { background: #ede9fe !important; color: #5b21b6 !important; }
+  .badge-kur { background: #ccfbf1 !important; color: #115e59 !important; }
 }

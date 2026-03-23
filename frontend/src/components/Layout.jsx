@@ -14,10 +14,9 @@ import {
   Bars3Icon,
   XMarkIcon,
   ArrowRightOnRectangleIcon,
-  ArrowUpTrayIcon,
   ShieldCheckIcon,
   ClipboardDocumentListIcon,
-  KeyIcon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -28,9 +27,8 @@ const navigation = [
   { name: 'Mitarbeiter', href: '/mitarbeiter', icon: UsersIcon },
   { name: 'Rayone', href: '/rayone', icon: MapIcon },
   { name: 'Fahrzeuge', href: '/fahrzeuge', icon: TruckIcon },
+  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: TableCellsIcon },
   { name: 'Statistik', href: '/statistik', icon: ChartBarIcon },
-  { name: 'Dienstplan-Import', href: '/dienstplan-import', icon: ArrowUpTrayIcon },
-  { name: 'Dienstplan-Grid', href: '/dienstplan-grid', icon: ArrowUpTrayIcon },
 ];
 
 const adminNavigation = [

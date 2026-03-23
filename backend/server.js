@@ -777,6 +777,13 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
 
   const rayone = db.prepare('SELECT * FROM rayone WHERE aktiv = 1 ORDER BY nummer').all();
 
+  // Fahrzeuge je Mitarbeiter (zugeteiltes aktives Fahrzeug)
+  const fahrzeugRows = db.prepare(
+    'SELECT mitarbeiter_id, kennzeichen FROM fahrzeuge WHERE aktiv = 1 AND mitarbeiter_id IS NOT NULL'
+  ).all();
+  const fahrzeugMap = {};
+  for (const f of fahrzeugRows) fahrzeugMap[f.mitarbeiter_id] = f.kennzeichen;
+
   // Abwesenheiten für den Tag
   const abwesenheiten = db.prepare(`
     SELECT a.*, m.name as mitarbeiter_name
@@ -870,7 +877,7 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
     return {
       rayon,
       stamm_mitarbeiter: stammMitarbeiter,
-      aktueller_mitarbeiter: mitarbeiter,
+      aktueller_mitarbeiter: mitarbeiter ? { ...mitarbeiter, fahrzeug_kennzeichen: fahrzeugMap[mitarbeiter.id] || null } : null,
       ist_mitnahme,
       ist_teilbesetzung,
       vertritt_name,
@@ -1079,6 +1086,72 @@ app.post('/api/mitnahme/berechnen', authMiddleware, (req, res) => {
 app.post('/api/vertretung/berechnen', authMiddleware, (req, res) => {
   req.url = '/api/mitnahme/berechnen';
   res.redirect(307, '/api/mitnahme/berechnen');
+});
+
+// ─── Dienstplan-Grid ──────────────────────────────────────────────────────────
+app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
+  const { monat } = req.query;
+  if (!monat || !/^\d{4}-\d{2}$/.test(monat)) {
+    return res.status(400).json({ fehler: 'Gültiger Monat erforderlich (YYYY-MM)' });
+  }
+  const db = getDb();
+
+  const mitarbeiter = db.prepare(
+    'SELECT id, name, personalnummer FROM mitarbeiter WHERE aktiv = 1 ORDER BY name'
+  ).all();
+
+  const zuteilungen = db.prepare(`
+    SELECT mz.mitarbeiter_id, mz.rayon_id, r.nummer as rayon_nummer
+    FROM monatszuteilungen mz
+    JOIN rayone r ON mz.rayon_id = r.id
+    WHERE mz.monat = ? AND mz.ist_teilzuteilung = 0
+  `).all(monat);
+  const zuteilungMap = {};
+  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = { nummer: z.rayon_nummer, id: z.rayon_id };
+
+  const abwesenheiten = db.prepare(
+    'SELECT mitarbeiter_id, datum, status FROM abwesenheiten WHERE datum LIKE ?'
+  ).all(`${monat}%`);
+  const abwesenheitMap = {};
+  for (const a of abwesenheiten) {
+    if (!abwesenheitMap[a.mitarbeiter_id]) abwesenheitMap[a.mitarbeiter_id] = {};
+    abwesenheitMap[a.mitarbeiter_id][a.datum] = a.status;
+  }
+
+  // Tagespläne: tägliche Rayon-Zuweisungen (überschreiben Monatszuteilung)
+  const tagesplaene = db.prepare(`
+    SELECT t.datum, t.mitarbeiter_id, r.nummer as rayon_nummer
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    WHERE t.datum LIKE ? AND t.mitarbeiter_id IS NOT NULL
+  `).all(`${monat}%`);
+  const tagesplanMap = {};
+  for (const t of tagesplaene) {
+    if (!tagesplanMap[t.mitarbeiter_id]) tagesplanMap[t.mitarbeiter_id] = {};
+    tagesplanMap[t.mitarbeiter_id][t.datum] = t.rayon_nummer;
+  }
+
+  const [jahr, mon] = monat.split('-').map(Number);
+  const tageImMonat = new Date(jahr, mon, 0).getDate();
+  const tage = [];
+  for (let d = 1; d <= tageImMonat; d++) {
+    const datum = `${monat}-${String(d).padStart(2, '0')}`;
+    tage.push({ datum, tag: d, wochentag: new Date(datum + 'T00:00:00').getDay() });
+  }
+
+  res.json({
+    monat,
+    tage,
+    mitarbeiter: mitarbeiter.map(m => ({
+      id: m.id,
+      name: m.name,
+      personalnummer: m.personalnummer,
+      rayon_nummer: zuteilungMap[m.id]?.nummer || null,
+      rayon_id: zuteilungMap[m.id]?.id || null,
+      abwesenheiten: abwesenheitMap[m.id] || {},
+      tagesplan: tagesplanMap[m.id] || {},
+    })),
+  });
 });
 
 // ─── Dienstplan-Import ────────────────────────────────────────────────────────
@@ -1456,7 +1529,7 @@ app.get('/api/dsgvo/export/:mitarbeiterId', authMiddleware, adminOnly, (req, res
 });
 
 // ─── Frontend-Serving (für Electron / Standalone) ────────────────────────────
-const frontendDist = process.env.FRONTEND_DIST;
+const frontendDist = process.env.FRONTEND_DIST ? require("path").resolve(process.env.FRONTEND_DIST) : null;
 if (frontendDist && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get(/^(?!\/api).*/, (req, res) => {

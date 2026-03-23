@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { ToastProvider } from './components/Toast.jsx';
+import { ConfirmProvider } from './components/ConfirmDialog.jsx';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout.jsx';
 import Login from './pages/Login.jsx';
@@ -77,6 +79,13 @@ function App() {
         e.target.setAttribute('autocomplete', 'off');
         e.target.setAttribute('data-lpignore', 'true');
         e.target.setAttribute('data-form-type', 'other');
+        e.target.setAttribute('data-1p-ignore', 'true');
+        e.target.setAttribute('autocorrect', 'off');
+        e.target.setAttribute('autocapitalize', 'off');
+        // Safari iCloud-Kontaktvorschläge unterdrücken
+        if (e.target.type === 'text') {
+          e.target.setAttribute('role', 'combobox');
+        }
       }
     };
     document.addEventListener('focus', disableAutocomplete, true);
@@ -96,6 +105,8 @@ function App() {
   };
 
   return (
+    <ToastProvider>
+    <ConfirmProvider>
     <AuthContext.Provider value={{ auth, login, logout }}>
       <BrowserRouter>
         <Routes>
@@ -122,6 +133,8 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthContext.Provider>
+    </ConfirmProvider>
+    </ToastProvider>
   );
 }
 

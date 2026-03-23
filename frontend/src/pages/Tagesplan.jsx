@@ -4,8 +4,9 @@ import {
   MagnifyingGlassIcon, PencilSquareIcon, UserIcon, CalendarIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
-import { formatDatumLang, heuteDatum, statusLabel } from '../utils/helpers.js';
+import { formatDatumLang, heuteDatum, statusLabel, statusBadgeClass } from '../utils/helpers.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import MonthPicker from '../components/MonthPicker.jsx';
 
 // ─── Hilfsfunktion: Wochen eines Monats berechnen ─────────────────────────────
 function getWeeksOfMonth(monat) {
@@ -84,13 +85,7 @@ export default function Tagesplan() {
           <p className="text-gray-500 mt-1">Übersicht aller Rayone</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="date"
-            className="input w-auto"
-            value={datum}
-            onChange={(e) => setDatum(e.target.value)}
-            autoComplete="off"
-          />
+          <MonthPicker value={datum} onChange={setDatum} mode="date" />
           <button
             onClick={() => setMonatModalOffen(true)}
             className="btn-secondary flex items-center gap-2"
@@ -126,7 +121,7 @@ export default function Tagesplan() {
 
       {/* Statistik-Zeile */}
       {!laden && (
-        <div className="grid grid-cols-3 gap-4 mb-4 no-print">
+        <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 mb-4 no-print">
           <div className="card text-center p-4">
             <div className="text-2xl font-bold text-green-600">{besetzt}</div>
             <div className="text-sm text-gray-500">Besetzt</div>
@@ -178,6 +173,23 @@ export default function Tagesplan() {
             )}
           </div>
         </>
+      )}
+
+      {/* Abwesenheiten – im Druck als eigener Abschnitt */}
+      {!laden && plan?.abwesenheiten?.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-700 mb-2">Abwesende Mitarbeiter</h2>
+          <div className="flex flex-wrap gap-2">
+            {plan.abwesenheiten.map(a => (
+              <span
+                key={`${a.mitarbeiter_id}-${a.datum}`}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(a.status)}`}
+              >
+                {a.mitarbeiter_name} · {statusLabel(a.status)}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Legende */}
@@ -270,7 +282,12 @@ function RayonKarte({ eintrag, onClick }) {
 
       {aktueller_mitarbeiter ? (
         <div className="pl-4">
-          <div className="font-semibold text-sm text-gray-900">{aktueller_mitarbeiter.name}</div>
+          <div className="flex items-baseline gap-2">
+            <div className="font-semibold text-sm text-gray-900">{aktueller_mitarbeiter.name}</div>
+            {aktueller_mitarbeiter.fahrzeug_kennzeichen && (
+              <span className="text-xs text-gray-400 font-normal">{aktueller_mitarbeiter.fahrzeug_kennzeichen}</span>
+            )}
+          </div>
           {ist_mitnahme && vertritt_name && (
             <div className="text-xs text-gray-500 mt-0.5">Mitnahme von: {vertritt_name}</div>
           )}
@@ -405,8 +422,8 @@ function RayonZuweisungModal({ eintrag, datum, mitarbeiter, plan, onClose, onSav
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-base font-bold text-gray-900">{rayon.bezeichnung}</h2>
@@ -670,8 +687,8 @@ function MonatsZuteilungModal({ monat, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Monatszuteilung</h2>

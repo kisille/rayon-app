@@ -29,6 +29,7 @@ export function statusLabel(status) {
     krank: 'Krank',
     urlaub: 'Urlaub',
     frei: 'Frei',
+    kur: 'Kur',
     sonstige: 'Sonstige Abwesenheit',
   };
   return labels[status] || status;
@@ -40,6 +41,7 @@ export function statusBadgeClass(status) {
     krank: 'badge-krank',
     urlaub: 'badge-urlaub',
     frei: 'badge-frei',
+    kur: 'badge-kur',
     sonstige: 'bg-gray-100 text-gray-800 text-xs font-semibold px-2.5 py-0.5 rounded-full',
   };
   return classes[status] || 'bg-gray-100 text-gray-700 text-xs px-2.5 py-0.5 rounded-full';

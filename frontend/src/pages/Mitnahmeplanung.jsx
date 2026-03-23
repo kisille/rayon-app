@@ -10,6 +10,8 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { heuteDatum, formatDatumLang } from '../utils/helpers.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import MonthPicker from '../components/MonthPicker';
 
 const MITNAHME_ART_LABEL = {
   vollmitnahme: 'Vollmitnahme',
@@ -59,13 +61,14 @@ export default function Mitnahmeplanung() {
 
   // Aktuellen Rayon eines Mitarbeiters ermitteln (aus Monatszuteilung oder Stamm)
   const getMitarbeiterRayon = (m) => {
-    if (m.aktueller_rayon_nummer) {
-      return `Rayon ${m.aktueller_rayon_nummer}${m.aktueller_rayon_bezeichnung ? ' – ' + m.aktueller_rayon_bezeichnung : ''}`;
-    }
-    if (m.stamm_rayon_nummer) {
-      return `Rayon ${m.stamm_rayon_nummer}${m.stamm_rayon_bezeichnung ? ' – ' + m.stamm_rayon_bezeichnung : ''}`;
-    }
-    return null;
+    const nummer = m.aktueller_rayon_nummer || m.stamm_rayon_nummer;
+    if (!nummer) return null;
+    const nrStr = String(nummer).padStart(4, '0');
+    const gebiet = m.aktueller_rayon_gebiet || m.stamm_rayon_gebiet;
+    const bezeichnung = m.aktueller_rayon_bezeichnung || m.stamm_rayon_bezeichnung;
+    // Gebiet bevorzugen, sonst Bezeichnung (wenn sie nicht nur "Rayon XXXX" ist)
+    const ort = gebiet || (bezeichnung && bezeichnung !== `Rayon ${nrStr}` && bezeichnung !== `Rayon ${nummer}` ? bezeichnung : null);
+    return `Rayon ${nrStr}${ort ? ' – ' + ort : ''}`;
   };
 
   const handleBerechnen = async () => {
@@ -131,12 +134,7 @@ export default function Mitnahmeplanung() {
           <h1 className="text-2xl font-bold text-gray-900">Mitnahmeplanung</h1>
           <p className="text-gray-500 mt-1">Optimale Mitnahmen automatisch berechnen oder manuell zuteilen</p>
         </div>
-        <input
-          type="date"
-          className="input w-auto"
-          value={datum}
-          onChange={(e) => setDatum(e.target.value)}
-        />
+        <MonthPicker value={datum} onChange={setDatum} mode="date" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -243,6 +241,12 @@ export default function Mitnahmeplanung() {
                   placeholder="Mitarbeiter nach Name oder Nr. suchen..."
                   value={mitarbeiterSuche}
                   onChange={(e) => setMitarbeiterSuche(e.target.value)}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-form-type="other"
+                  data-1p-ignore="true"
+                  readOnly
+                  onFocus={e => { e.target.readOnly = false; }}
                 />
               </div>
             )}
@@ -297,28 +301,17 @@ export default function Mitnahmeplanung() {
             )}
           </div>
 
-          {/* Legende */}
+          {/* Kompetenz-Hinweis */}
           {berechnet && (
-            <div className="mt-4 card p-4">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Legende</h3>
-              <div className="space-y-1 text-xs text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span className="w-16 text-center px-1 py-0.5 rounded bg-green-100 text-green-800 font-medium">Vollmitnahme</span>
-                  Rayon komplett übernommen → eigener Rayon unbesetzt
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-16 text-center px-1 py-0.5 rounded bg-yellow-100 text-yellow-800 font-medium">Teilmitnahme</span>
-                  Kleiner Teil zusätzlich → eigener Rayon bleibt besetzt
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-green-100 text-green-800 rounded text-center font-bold text-xs leading-4">2</span>
-                  Sehr gut – kennt Rayon gut (Level 2)
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-4 h-4 bg-orange-100 text-orange-800 rounded text-center font-bold text-xs leading-4">3</span>
-                  Geht so – Level 3
-                </div>
-              </div>
+            <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-green-100 text-green-800 rounded text-center font-bold leading-4">2</span>
+                kennt Rayon gut
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-4 h-4 bg-orange-100 text-orange-800 rounded text-center font-bold leading-4">3</span>
+                kennt Rayon mäßig
+              </span>
             </div>
           )}
         </div>
@@ -362,16 +355,14 @@ function MitnahmeEintrag({ eintrag, index, manuelleModus, mitarbeiter, rayone, o
         <div className="mt-2 space-y-2">
           <div>
             <label className="text-xs text-gray-500">Mitarbeiter:</label>
-            <select
-              className="input text-sm mt-0.5"
+            <SearchableSelect
+              options={mitarbeiter.map(m => ({ id: m.id, label: m.name }))}
               value={eintrag.vertreter_id || ''}
-              onChange={e => onAnpassen(index, 'vertreter_id', e.target.value ? parseInt(e.target.value) : null)}
-            >
-              <option value="">– Kein Mitarbeiter –</option>
-              {mitarbeiter.map(m => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+              onChange={id => onAnpassen(index, 'vertreter_id', id ? parseInt(id) : null)}
+              emptyLabel="– Kein Mitarbeiter –"
+              searchPlaceholder="Name suchen..."
+              className="mt-0.5"
+            />
           </div>
           <div>
             <label className="text-xs text-gray-500">Art der Mitnahme:</label>

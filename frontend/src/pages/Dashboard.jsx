@@ -7,15 +7,20 @@ import {
   CheckCircleIcon,
   ArrowRightIcon,
   PlusIcon,
-  XMarkIcon,
+  PencilSquareIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { formatDatumLang, statusLabel, statusBadgeClass, heuteDatum } from '../utils/helpers.js';
+import { SearchableSelect } from '../components/SearchableSelect.jsx';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 
 export default function Dashboard() {
+  const confirm = useConfirm();
   const [daten, setDaten] = useState(null);
   const [laden, setLaden] = useState(true);
   const [abwesenheitModal, setAbwesenheitModal] = useState(false);
+  const [bearbeiteDaten, setBearbeiteDaten] = useState(null);
   const [mitarbeiter, setMitarbeiter] = useState([]);
 
   const ladeDaten = () => {
@@ -46,6 +51,23 @@ export default function Dashboard() {
   const anzahlAusfälle = (abwesenheitenMap.krank || 0) +
     (abwesenheitenMap.urlaub || 0) +
     (abwesenheitenMap.sonstige || 0);
+
+  const öffneBearbeiten = (a) => {
+    setBearbeiteDaten(a);
+    setAbwesenheitModal(true);
+  };
+
+  const löscheAbwesenheit = async (a) => {
+    if (!await confirm(`Abwesenheit von ${a.mitarbeiter_name} wirklich löschen?`)) return;
+    await api.delete(`/abwesenheiten/${a.mitarbeiter_id}/${a.datum}`);
+    setLaden(true);
+    ladeDaten();
+  };
+
+  const öffneNeu = () => {
+    setBearbeiteDaten(null);
+    setAbwesenheitModal(true);
+  };
 
   return (
     <div>
@@ -96,7 +118,7 @@ export default function Dashboard() {
             <h2 className="font-semibold text-gray-900">Abwesenheiten heute</h2>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setAbwesenheitModal(true)}
+                onClick={öffneNeu}
                 className="flex items-center gap-1 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-medium px-2 py-1 rounded-lg transition-colors"
                 title="Abwesenheit manuell eintragen"
               >
@@ -124,9 +146,25 @@ export default function Dashboard() {
                       <span className="text-gray-400 text-xs ml-2">Rayon {a.rayon_nummer}</span>
                     )}
                   </div>
-                  <span className={statusBadgeClass(a.status)}>
-                    {statusLabel(a.status)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={statusBadgeClass(a.status)}>
+                      {statusLabel(a.status)}
+                    </span>
+                    <button
+                      onClick={() => öffneBearbeiten(a)}
+                      className="text-gray-300 hover:text-yellow-500 transition-colors"
+                      title="Bearbeiten"
+                    >
+                      <PencilSquareIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => löscheAbwesenheit(a)}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      title="Löschen"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -141,7 +179,7 @@ export default function Dashboard() {
               href="/tagesplan"
               icon="📋"
               title="Tagesplan aufrufen"
-              desc="Übersicht aller 37 Rayone für heute"
+              desc={`Übersicht aller ${daten?.anzahl_rayone || 0} Rayone für heute`}
             />
             <QuickAction
               href="/vertretung"
@@ -165,12 +203,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Modal: Abwesenheit manuell eintragen */}
+      {/* Modal: Abwesenheit eintragen / bearbeiten */}
       {abwesenheitModal && (
         <AbwesenheitModal
           mitarbeiter={mitarbeiter}
-          onClose={() => setAbwesenheitModal(false)}
-          onSaved={() => { setAbwesenheitModal(false); setLaden(true); ladeDaten(); }}
+          bearbeiteDaten={bearbeiteDaten}
+          onClose={() => { setAbwesenheitModal(false); setBearbeiteDaten(null); }}
+          onSaved={() => { setAbwesenheitModal(false); setBearbeiteDaten(null); setLaden(true); ladeDaten(); }}
         />
       )}
     </div>
@@ -178,32 +217,41 @@ export default function Dashboard() {
 }
 
 // ─── AbwesenheitModal ─────────────────────────────────────────────────────────
-function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
+function AbwesenheitModal({ mitarbeiter, bearbeiteDaten, onClose, onSaved }) {
+  const isEdit = !!bearbeiteDaten;
   const [formDaten, setFormDaten] = useState({
-    mitarbeiter_id: '',
-    datum: heuteDatum(),
-    status: 'krank',
-    bemerkung: '',
+    mitarbeiter_id: bearbeiteDaten ? String(bearbeiteDaten.mitarbeiter_id) : '',
+    von: bearbeiteDaten ? bearbeiteDaten.datum : heuteDatum(),
+    bis: bearbeiteDaten ? bearbeiteDaten.datum : heuteDatum(),
+    status: bearbeiteDaten ? bearbeiteDaten.status : 'krank',
+    bemerkung: bearbeiteDaten ? (bearbeiteDaten.bemerkung || '') : '',
   });
   const [speichern, setSpeichern] = useState(false);
   const [fehler, setFehler] = useState('');
-  const [suche, setSuche] = useState('');
-
-  const gefilterteMitarbeiter = mitarbeiter.filter(m => {
-    if (!suche) return true;
-    const q = suche.toLowerCase();
-    return m.name.toLowerCase().includes(q) || m.personalnummer.includes(suche);
-  });
 
   const handleSpeichern = async (e) => {
     e.preventDefault();
     if (!formDaten.mitarbeiter_id) { setFehler('Bitte Mitarbeiter auswählen.'); return; }
     setSpeichern(true);
     setFehler('');
+
+    // Datumsbereich expandieren
+    const daten = [];
+    const start = new Date(formDaten.von);
+    const ende = new Date(formDaten.bis);
+    for (let d = new Date(start); d <= ende; d.setDate(d.getDate() + 1)) {
+      daten.push(d.toISOString().split('T')[0]);
+    }
+
     try {
+      // Bei Bearbeitung: alten Eintrag löschen
+      if (isEdit) {
+        await api.delete(`/abwesenheiten/${bearbeiteDaten.mitarbeiter_id}/${bearbeiteDaten.datum}`);
+      }
+      // Neue Einträge speichern
       await api.post('/abwesenheiten', {
         mitarbeiter_id: parseInt(formDaten.mitarbeiter_id),
-        datum: formDaten.datum,
+        datum: daten.length === 1 ? daten[0] : daten,
         status: formDaten.status,
         bemerkung: formDaten.bemerkung || null,
       });
@@ -215,45 +263,57 @@ function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Abwesenheit eintragen</h3>
+          <h3 className="font-semibold text-gray-900">
+            {isEdit ? 'Abwesenheit bearbeiten' : 'Abwesenheit eintragen'}
+          </h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
-        <form onSubmit={handleSpeichern} className="px-6 py-4 space-y-4">
+        <form autoComplete="off" onSubmit={handleSpeichern} className="px-6 py-4 space-y-4">
           {/* Mitarbeiter-Suche */}
           <div>
             <label className="label">Mitarbeiter *</label>
-            <input
-              type="text"
-              className="input mb-1 text-sm"
-              placeholder="Nach Name oder Nr. suchen..."
-              value={suche}
-              onChange={(e) => setSuche(e.target.value)}
-            />
-            <select
-              className="input text-sm"
-              required
-              value={formDaten.mitarbeiter_id}
-              onChange={(e) => setFormDaten({ ...formDaten, mitarbeiter_id: e.target.value })}
-            >
-              <option value="">– Mitarbeiter auswählen –</option>
-              {gefilterteMitarbeiter.map(m => (
-                <option key={m.id} value={m.id}>{m.name} (Nr. {m.personalnummer})</option>
-              ))}
-            </select>
+            {isEdit ? (
+              <div className="input bg-gray-50 text-gray-600 text-sm">
+                {bearbeiteDaten.mitarbeiter_name}
+              </div>
+            ) : (
+              <SearchableSelect
+                options={mitarbeiter.map(m => ({ id: String(m.id), label: m.name, sublabel: `Nr. ${m.personalnummer}` }))}
+                value={formDaten.mitarbeiter_id}
+                onChange={id => setFormDaten({ ...formDaten, mitarbeiter_id: id })}
+                emptyLabel="– Mitarbeiter auswählen –"
+                searchPlaceholder="Name oder Personalnummer..."
+              />
+            )}
           </div>
 
-          <div>
-            <label className="label">Datum *</label>
-            <input
-              type="date"
-              className="input"
-              required
-              value={formDaten.datum}
-              onChange={(e) => setFormDaten({ ...formDaten, datum: e.target.value })}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Von *</label>
+              <input
+                type="date"
+                className="input"
+                required
+                value={formDaten.von}
+                onChange={(e) => setFormDaten({ ...formDaten, von: e.target.value, bis: formDaten.bis < e.target.value ? e.target.value : formDaten.bis })}
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label className="label">Bis *</label>
+              <input
+                type="date"
+                className="input"
+                required
+                value={formDaten.bis}
+                min={formDaten.von}
+                onChange={(e) => setFormDaten({ ...formDaten, bis: e.target.value })}
+                autoComplete="off"
+              />
+            </div>
           </div>
 
           <div>
@@ -266,6 +326,7 @@ function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
               <option value="krank">Krank</option>
               <option value="urlaub">Urlaub</option>
               <option value="frei">Frei</option>
+              <option value="kur">Kur</option>
               <option value="sonstige">Sonstige</option>
             </select>
           </div>
@@ -278,6 +339,7 @@ function AbwesenheitModal({ mitarbeiter, onClose, onSaved }) {
               placeholder="Optional..."
               value={formDaten.bemerkung}
               onChange={(e) => setFormDaten({ ...formDaten, bemerkung: e.target.value })}
+              autoComplete="new-password"
             />
           </div>
 

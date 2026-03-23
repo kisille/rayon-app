@@ -2,17 +2,97 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { getDb } = require('./database');
 const { berechneMitnahmeplan } = require('./mitnahmeplaner');
 
+// ─── Auto-Backup ──────────────────────────────────────────────────────────────
+function erstelleBackup() {
+  const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'rayon.db');
+  const backupDir = path.join(__dirname, 'backups');
+  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+  const datum = new Date().toISOString().split('T')[0];
+  const zielPfad = path.join(backupDir, `rayon.db.backup.${datum}`);
+
+  if (!fs.existsSync(zielPfad)) {
+    try {
+      fs.copyFileSync(DB_PATH, zielPfad);
+      console.log(`[Backup] Erstellt: ${zielPfad}`);
+    } catch (e) {
+      console.error('[Backup] Fehler:', e.message);
+    }
+  }
+
+  // Alte Backups löschen (nur letzte 7 behalten)
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => f.startsWith('rayon.db.backup.'))
+    .sort()
+    .reverse();
+  for (const alt of backups.slice(7)) {
+    fs.unlinkSync(path.join(backupDir, alt));
+    console.log(`[Backup] Alt gelöscht: ${alt}`);
+  }
+}
+
+// Backup beim Start + täglich um 02:00 Uhr
+setTimeout(erstelleBackup, 5000);
+setInterval(() => {
+  const jetzt = new Date();
+  if (jetzt.getHours() === 2 && jetzt.getMinutes() === 0) erstelleBackup();
+}, 60 * 1000);
+
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'rayon-app-geheimnis-2024';
 
-app.use(cors());
+// ─── JWT Secret ───────────────────────────────────────────────────────────────
+let JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  JWT_SECRET = crypto.randomBytes(64).toString('hex');
+  console.warn('[SICHERHEIT] JWT_SECRET ist nicht gesetzt! Ein zufälliger Schlüssel wird verwendet.');
+  console.warn('[SICHERHEIT] Setze JWT_SECRET als Umgebungsvariable, damit Logins nach einem Neustart gültig bleiben.');
+}
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+const erlaubteOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:3001')
+  .split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || erlaubteOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: Herkunft ${origin} nicht erlaubt`));
+  }
+}));
+
+// ─── Rate-Limiting ────────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 Minuten
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { fehler: 'Zu viele Anmeldeversuche. Bitte warte 15 Minuten.' }
+});
+
 app.use(express.json());
+
+// ─── Audit-Log Helper ─────────────────────────────────────────────────────────
+function schreibeAuditLog(req) {
+  const AUDIT_METHODEN = ['POST', 'PUT', 'DELETE', 'PATCH'];
+  if (!AUDIT_METHODEN.includes(req.method)) return;
+  const body = { ...req.body };
+  if (body.passwort) body.passwort = '[VERBORGEN]';
+  if (body.passwort_hash) body.passwort_hash = '[VERBORGEN]';
+  try {
+    getDb().prepare(`
+      INSERT INTO audit_log (benutzer_id, benutzername, methode, pfad, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(req.benutzer?.id || null, req.benutzer?.benutzername || 'unbekannt', req.method, req.path, JSON.stringify(body));
+  } catch (e) {
+    console.error('[AuditLog] Fehler:', e.message);
+  }
+}
 
 // ─── Middleware: JWT Auth ─────────────────────────────────────────────────────
 function authMiddleware(req, res, next) {
@@ -20,10 +100,18 @@ function authMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ fehler: 'Nicht authentifiziert' });
   try {
     req.benutzer = jwt.verify(token, JWT_SECRET);
+    schreibeAuditLog(req);
     next();
   } catch {
     return res.status(401).json({ fehler: 'Token ungültig' });
   }
+}
+
+function adminOnly(req, res, next) {
+  if (req.benutzer?.rolle !== 'admin') {
+    return res.status(403).json({ fehler: 'Nur Administratoren haben Zugriff' });
+  }
+  next();
 }
 
 // Hilfsfunktion: aktuellen Rayon eines Mitarbeiters für einen Monat ermitteln
@@ -48,8 +136,27 @@ function getAktuellerRayon(db, mitarbeiterId, monat) {
   return null;
 }
 
+// ─── Health Check ─────────────────────────────────────────────────────────────
+const startZeit = Date.now();
+app.get('/api/health', (req, res) => {
+  let dbStatus = 'ok';
+  try {
+    getDb().prepare('SELECT 1').get();
+  } catch {
+    dbStatus = 'fehler';
+  }
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    version: '1.0',
+    uptime_s: Math.floor((Date.now() - startZeit) / 1000),
+    db: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', loginLimiter, (req, res) => {
   const { benutzername, passwort } = req.body;
   const db = getDb();
   const benutzer = db.prepare('SELECT * FROM benutzer WHERE benutzername = ?').get(benutzername);
@@ -59,12 +166,12 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: benutzer.id, benutzername: benutzer.benutzername, name: benutzer.name },
+    { id: benutzer.id, benutzername: benutzer.benutzername, name: benutzer.name, rolle: benutzer.rolle || 'admin' },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
 
-  res.json({ token, name: benutzer.name });
+  res.json({ token, name: benutzer.name, rolle: benutzer.rolle || 'admin' });
 });
 
 // ─── Rayone ───────────────────────────────────────────────────────────────────
@@ -97,13 +204,6 @@ app.get('/api/rayone', authMiddleware, (req, res) => {
     zuteilungMap[z.rayon_id].push(z);
   }
 
-  // Fallback: Stamm-Rayon wenn keine Monatszuteilung
-  const stammbesetzung = db.prepare(`
-    SELECT m.stamm_rayon_id as rayon_id, m.id as mitarbeiter_id, m.name as mitarbeiter_name
-    FROM mitarbeiter m
-    WHERE m.aktiv = 1 AND m.stamm_rayon_id IS NOT NULL
-  `).all();
-
   // Heutiger Tagesplan (überschreibt Monatsplan für Anzeige)
   const tagesplanHeute = db.prepare(`
     SELECT t.rayon_id, t.mitarbeiter_id, m.name as mitarbeiter_name, t.ist_teilbesetzung
@@ -135,11 +235,7 @@ app.get('/api/rayone', authMiddleware, (req, res) => {
     if (tagesplanHeuteMap[r.id]) {
       besetzung = tagesplanHeuteMap[r.id];
     } else {
-      besetzung = zuteilungMap[r.id];
-      if (!besetzung || besetzung.length === 0) {
-        const stamm = stammbesetzung.filter(s => s.rayon_id === r.id);
-        besetzung = stamm.map(s => ({ ...s, ist_teilzuteilung: 0 }));
-      }
+      besetzung = zuteilungMap[r.id] || [];
     }
     return {
       ...r,
@@ -181,9 +277,7 @@ app.get('/api/rayone/:id', authMiddleware, (req, res) => {
     WHERE m.stamm_rayon_id = ? AND m.aktiv = 1
   `).all(req.params.id);
 
-  const aktuelle = aktuelleZuteilung.length > 0 ? aktuelleZuteilung : stammBesetzung.map(s => ({ ...s, ist_teilzuteilung: 0 }));
-
-  res.json({ ...rayon, mitarbeiter, aktuelle_besetzung: aktuelle, stamm_besetzung: stammBesetzung });
+  res.json({ ...rayon, mitarbeiter, aktuelle_besetzung: aktuelleZuteilung, stamm_besetzung: stammBesetzung });
 });
 
 app.put('/api/rayone/:id', authMiddleware, (req, res) => {
@@ -194,6 +288,24 @@ app.put('/api/rayone/:id', authMiddleware, (req, res) => {
   res.json({ erfolg: true });
 });
 
+app.post('/api/rayone', authMiddleware, (req, res) => {
+  const { nummer, bezeichnung, gebiet, priorität } = req.body;
+  const db = getDb();
+  if (!nummer || !bezeichnung) return res.status(400).json({ fehler: 'Nummer und Bezeichnung erforderlich' });
+  const exists = db.prepare('SELECT id FROM rayone WHERE nummer = ?').get(nummer);
+  if (exists) return res.status(409).json({ fehler: `Rayon ${nummer} existiert bereits` });
+  const result = db.prepare(
+    'INSERT INTO rayone (nummer, bezeichnung, gebiet, priorität) VALUES (?, ?, ?, ?)'
+  ).run(Number(nummer), bezeichnung, gebiet || null, priorität || 'normal');
+  res.json({ id: Number(result.lastInsertRowid), erfolg: true });
+});
+
+app.delete('/api/rayone/:id', authMiddleware, (req, res) => {
+  const db = getDb();
+  db.prepare('UPDATE rayone SET aktiv = 0 WHERE id = ?').run(req.params.id);
+  res.json({ erfolg: true });
+});
+
 // ─── Mitarbeiter ──────────────────────────────────────────────────────────────
 app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
   const db = getDb();
@@ -201,7 +313,7 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
   const heute = new Date().toISOString().split('T')[0];
 
   const mitarbeiter = db.prepare(`
-    SELECT m.*, r.nummer as stamm_rayon_nummer, r.bezeichnung as stamm_rayon_bezeichnung,
+    SELECT m.*, r.nummer as stamm_rayon_nummer, r.bezeichnung as stamm_rayon_bezeichnung, r.gebiet as stamm_rayon_gebiet,
       (SELECT f.kennzeichen FROM fahrzeuge f WHERE f.mitarbeiter_id = m.id AND f.aktiv = 1 LIMIT 1) as fahrzeug_kennzeichen,
       (SELECT f.id FROM fahrzeuge f WHERE f.mitarbeiter_id = m.id AND f.aktiv = 1 LIMIT 1) as fahrzeug_id
     FROM mitarbeiter m
@@ -212,7 +324,7 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
 
   // Monatszuteilungen laden
   const zuteilungen = db.prepare(`
-    SELECT mz.mitarbeiter_id, r.id as rayon_id, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung, mz.ist_teilzuteilung
+    SELECT mz.mitarbeiter_id, r.id as rayon_id, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung, r.gebiet as rayon_gebiet, mz.ist_teilzuteilung
     FROM monatszuteilungen mz
     JOIN rayone r ON mz.rayon_id = r.id
     WHERE mz.monat = ?
@@ -247,11 +359,12 @@ app.get('/api/mitarbeiter', authMiddleware, (req, res) => {
       aktueller_rayon_id: ganz?.rayon_id || m.stamm_rayon_id,
       aktueller_rayon_nummer: ganz?.rayon_nummer || m.stamm_rayon_nummer,
       aktueller_rayon_bezeichnung: ganz?.rayon_bezeichnung || m.stamm_rayon_bezeichnung,
+      aktueller_rayon_gebiet: ganz?.rayon_gebiet || m.stamm_rayon_gebiet,
       hat_monatszuteilung: !!z,
       teilmitnahmen: z?.teilmitnahmen || [],
-      heute_rayon_id: heute_eintrag?.rayon_id || null,
-      heute_rayon_nummer: heute_eintrag?.rayon_nummer || null,
-      heute_rayon_bezeichnung: heute_eintrag?.rayon_bezeichnung || null,
+      heute_rayon_id: heute_eintrag?.rayon_id || ganz?.rayon_id || null,
+      heute_rayon_nummer: heute_eintrag?.rayon_nummer || ganz?.rayon_nummer || null,
+      heute_rayon_bezeichnung: heute_eintrag?.rayon_bezeichnung || ganz?.rayon_bezeichnung || null,
     };
   });
 
@@ -361,19 +474,12 @@ app.put('/api/mitarbeiter/:id', authMiddleware, (req, res) => {
   const neueRayonId = stamm_rayon_id ? parseInt(stamm_rayon_id) : null;
 
   if (alteRayonId !== neueRayonId) {
-    // Kompetenz Level 1 aktualisieren
+    // Kompetenz Level 1 aktualisieren (alten Stamm-Level entfernen)
     if (alteRayonId) {
       db.prepare('DELETE FROM kompetenzen WHERE mitarbeiter_id = ? AND rayon_id = ? AND level = 1')
         .run(req.params.id, alteRayonId);
     }
-    // Monatszuteilung für aktuellen Monat aktualisieren
-    const currentMonat = new Date().toISOString().substring(0, 7);
-    db.prepare('DELETE FROM monatszuteilungen WHERE mitarbeiter_id = ? AND monat = ?')
-      .run(req.params.id, currentMonat);
-    if (neueRayonId) {
-      db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
-        .run(currentMonat, req.params.id, neueRayonId);
-    }
+    // KEIN automatisches Erstellen einer Monatszuteilung – Stammbezirk ≠ aktuell besetzt
   }
 
   if (neueRayonId) {
@@ -467,7 +573,8 @@ app.post('/api/monatszuteilungen', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -535,7 +642,8 @@ app.put('/api/monatszuteilungen/:monat/rayon/:rayonId', authMiddleware, (req, re
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -583,7 +691,8 @@ app.post('/api/abwesenheiten', authMiddleware, (req, res) => {
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
-      return res.status(500).json({ fehler: err.message });
+      console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
     }
   } else {
     db.prepare(`
@@ -635,22 +744,22 @@ app.get('/api/fahrzeuge/:id', authMiddleware, (req, res) => {
 });
 
 app.post('/api/fahrzeuge', authMiddleware, (req, res) => {
-  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung } = req.body;
+  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung } = req.body;
   const db = getDb();
   const result = db.prepare(`
-    INSERT INTO fahrzeuge (kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status || 'verfügbar', mitarbeiter_id || null, bemerkung || null);
+    INSERT INTO fahrzeuge (kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status || 'verfügbar', mitarbeiter_id || null, bemerkung || null, erstzulassung || null, letzte_vorführung || null);
   res.json({ id: Number(result.lastInsertRowid), erfolg: true });
 });
 
 app.put('/api/fahrzeuge/:id', authMiddleware, (req, res) => {
-  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung } = req.body;
+  const { kennzeichen, marke, modell, antrieb, typ, status, mitarbeiter_id, bemerkung, erstzulassung, letzte_vorführung } = req.body;
   const db = getDb();
   db.prepare(`
-    UPDATE fahrzeuge SET kennzeichen = ?, marke = ?, modell = ?, antrieb = ?, typ = ?, status = ?, mitarbeiter_id = ?, bemerkung = ?
+    UPDATE fahrzeuge SET kennzeichen = ?, marke = ?, modell = ?, antrieb = ?, typ = ?, status = ?, mitarbeiter_id = ?, bemerkung = ?, erstzulassung = ?, letzte_vorführung = ?
     WHERE id = ?
-  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status, mitarbeiter_id || null, bemerkung || null, req.params.id);
+  `).run(kennzeichen, marke, modell || null, antrieb, typ || 'Zustellfahrzeug', status, mitarbeiter_id || null, bemerkung || null, erstzulassung || null, letzte_vorführung || null, req.params.id);
   res.json({ erfolg: true });
 });
 
@@ -667,6 +776,13 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
   const monat = datum.substring(0, 7);
 
   const rayone = db.prepare('SELECT * FROM rayone WHERE aktiv = 1 ORDER BY nummer').all();
+
+  // Fahrzeuge je Mitarbeiter (zugeteiltes aktives Fahrzeug)
+  const fahrzeugRows = db.prepare(
+    'SELECT mitarbeiter_id, kennzeichen FROM fahrzeuge WHERE aktiv = 1 AND mitarbeiter_id IS NOT NULL'
+  ).all();
+  const fahrzeugMap = {};
+  for (const f of fahrzeugRows) fahrzeugMap[f.mitarbeiter_id] = f.kennzeichen;
 
   // Abwesenheiten für den Tag
   const abwesenheiten = db.prepare(`
@@ -724,12 +840,13 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
   for (const s of stammbesetzung) stammMap[s.rayon_id] = s;
 
   const plan = rayone.map(rayon => {
-    // Primären Mitarbeiter ermitteln (Monatszuteilung oder Stamm)
+    // Primären Mitarbeiter ermitteln (nur Monatszuteilung, kein Stamm-Fallback)
     const zuteilung = zuteilungMap[rayon.id];
-    let stammMitarbeiterId = zuteilung?.mitarbeiter_id || stammMap[rayon.id]?.id;
-    let stammMitarbeiter = zuteilung
+    const stammzustellerInfo = stammMap[rayon.id]; // nur für Info-Anzeige
+    let stammMitarbeiterId = zuteilung?.mitarbeiter_id;
+    let stammMitarbeiter = stammMitarbeiterId
       ? db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(stammMitarbeiterId)
-      : stammMap[rayon.id];
+      : null;
 
     const tagesplanEintrag = tagesplanMap[rayon.id];
 
@@ -760,7 +877,7 @@ app.get('/api/tagesplan/:datum', authMiddleware, (req, res) => {
     return {
       rayon,
       stamm_mitarbeiter: stammMitarbeiter,
-      aktueller_mitarbeiter: mitarbeiter,
+      aktueller_mitarbeiter: mitarbeiter ? { ...mitarbeiter, fahrzeug_kennzeichen: fahrzeugMap[mitarbeiter.id] || null } : null,
       ist_mitnahme,
       ist_teilbesetzung,
       vertritt_name,
@@ -793,9 +910,42 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
   const deleteTeilmitnahmen = db.prepare('DELETE FROM tagesplan_teilmitnahmen WHERE datum = ? AND rayon_id = ?');
   const insertTeilmitnahme = db.prepare('INSERT OR IGNORE INTO tagesplan_teilmitnahmen (datum, rayon_id, mitarbeiter_id) VALUES (?, ?, ?)');
 
+  const monat = datum.substring(0, 7);
+
   db.exec('BEGIN');
   try {
     for (const eintrag of eintraege) {
+      // Generelle Regel: Pro Rayon darf nur EINE Vollzustellung existieren.
+      // Bestehende Vollzustellung für diesen Rayon entfernen bevor neue gesetzt wird.
+      if (eintrag.mitarbeiter_id && !eintrag.ist_teilbesetzung) {
+        db.prepare(`
+          UPDATE tagespläne SET mitarbeiter_id = NULL, ist_vertretung = 0, vertritt_mitarbeiter_id = NULL
+          WHERE datum = ? AND rayon_id = ? AND ist_teilbesetzung = 0 AND mitarbeiter_id != ?
+        `).run(datum, eintrag.rayon_id, eintrag.mitarbeiter_id);
+      }
+
+      // Wenn ein Mitarbeiter als Vollzustellung einem Rayon zugewiesen wird:
+      // Alle anderen Tagesplan-Vollzustellungen für diesen MA heute leeren
+      if (eintrag.mitarbeiter_id && !eintrag.ist_teilbesetzung) {
+        db.prepare(`
+          UPDATE tagespläne SET mitarbeiter_id = NULL, ist_vertretung = 0, vertritt_mitarbeiter_id = NULL
+          WHERE datum = ? AND mitarbeiter_id = ? AND rayon_id != ? AND ist_teilbesetzung = 0
+        `).run(datum, eintrag.mitarbeiter_id, eintrag.rayon_id);
+
+        // Für Rayone mit Monatszuteilung dieses MA: Null-Eintrag anlegen, damit Fallback nicht greift
+        const andereZuteilungen = db.prepare(`
+          SELECT rayon_id FROM monatszuteilungen
+          WHERE mitarbeiter_id = ? AND monat = ? AND rayon_id != ? AND ist_teilzuteilung = 0
+        `).all(eintrag.mitarbeiter_id, monat, eintrag.rayon_id);
+
+        for (const az of andereZuteilungen) {
+          db.prepare(`
+            INSERT OR IGNORE INTO tagespläne (datum, rayon_id, mitarbeiter_id, ist_vertretung, ist_teilbesetzung, bestätigt)
+            VALUES (?, ?, NULL, 0, 0, 1)
+          `).run(datum, az.rayon_id);
+        }
+      }
+
       upsert.run(
         datum,
         eintrag.rayon_id,
@@ -822,9 +972,26 @@ app.post('/api/tagesplan/:datum/speichern', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
+});
+
+// ─── Tägliche Zuteilungen für Datumsbereich (für DienstplanGrid) ──────────────
+app.get('/api/tagesplan-zuteilungen', authMiddleware, (req, res) => {
+  const { von, bis } = req.query;
+  const db = getDb();
+  if (!von || !bis) return res.status(400).json({ fehler: 'von und bis erforderlich' });
+  const rows = db.prepare(`
+    SELECT t.datum, t.mitarbeiter_id, t.rayon_id, r.nummer AS rayon_nummer
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    WHERE t.datum BETWEEN ? AND ?
+      AND t.mitarbeiter_id IS NOT NULL
+    ORDER BY t.datum
+  `).all(von, bis);
+  res.json(rows);
 });
 
 // ─── Wochenbesetzung (tageweise Überschreibungen) ─────────────────────────────
@@ -872,7 +1039,8 @@ app.post('/api/tagesplan/wochenbesetzung', authMiddleware, (req, res) => {
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
-    return res.status(500).json({ fehler: err.message });
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
   }
   res.json({ erfolg: true });
 });
@@ -918,6 +1086,202 @@ app.post('/api/mitnahme/berechnen', authMiddleware, (req, res) => {
 app.post('/api/vertretung/berechnen', authMiddleware, (req, res) => {
   req.url = '/api/mitnahme/berechnen';
   res.redirect(307, '/api/mitnahme/berechnen');
+});
+
+// ─── Dienstplan-Grid ──────────────────────────────────────────────────────────
+app.get('/api/dienstplan/grid', authMiddleware, (req, res) => {
+  const { monat } = req.query;
+  if (!monat || !/^\d{4}-\d{2}$/.test(monat)) {
+    return res.status(400).json({ fehler: 'Gültiger Monat erforderlich (YYYY-MM)' });
+  }
+  const db = getDb();
+
+  const mitarbeiter = db.prepare(
+    'SELECT id, name, personalnummer FROM mitarbeiter WHERE aktiv = 1 ORDER BY name'
+  ).all();
+
+  const zuteilungen = db.prepare(`
+    SELECT mz.mitarbeiter_id, mz.rayon_id, r.nummer as rayon_nummer
+    FROM monatszuteilungen mz
+    JOIN rayone r ON mz.rayon_id = r.id
+    WHERE mz.monat = ? AND mz.ist_teilzuteilung = 0
+  `).all(monat);
+  const zuteilungMap = {};
+  for (const z of zuteilungen) zuteilungMap[z.mitarbeiter_id] = { nummer: z.rayon_nummer, id: z.rayon_id };
+
+  const abwesenheiten = db.prepare(
+    'SELECT mitarbeiter_id, datum, status FROM abwesenheiten WHERE datum LIKE ?'
+  ).all(`${monat}%`);
+  const abwesenheitMap = {};
+  for (const a of abwesenheiten) {
+    if (!abwesenheitMap[a.mitarbeiter_id]) abwesenheitMap[a.mitarbeiter_id] = {};
+    abwesenheitMap[a.mitarbeiter_id][a.datum] = a.status;
+  }
+
+  // Tagespläne: tägliche Rayon-Zuweisungen (überschreiben Monatszuteilung)
+  const tagesplaene = db.prepare(`
+    SELECT t.datum, t.mitarbeiter_id, r.nummer as rayon_nummer
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    WHERE t.datum LIKE ? AND t.mitarbeiter_id IS NOT NULL
+  `).all(`${monat}%`);
+  const tagesplanMap = {};
+  for (const t of tagesplaene) {
+    if (!tagesplanMap[t.mitarbeiter_id]) tagesplanMap[t.mitarbeiter_id] = {};
+    tagesplanMap[t.mitarbeiter_id][t.datum] = t.rayon_nummer;
+  }
+
+  const [jahr, mon] = monat.split('-').map(Number);
+  const tageImMonat = new Date(jahr, mon, 0).getDate();
+  const tage = [];
+  for (let d = 1; d <= tageImMonat; d++) {
+    const datum = `${monat}-${String(d).padStart(2, '0')}`;
+    tage.push({ datum, tag: d, wochentag: new Date(datum + 'T00:00:00').getDay() });
+  }
+
+  res.json({
+    monat,
+    tage,
+    mitarbeiter: mitarbeiter.map(m => ({
+      id: m.id,
+      name: m.name,
+      personalnummer: m.personalnummer,
+      rayon_nummer: zuteilungMap[m.id]?.nummer || null,
+      rayon_id: zuteilungMap[m.id]?.id || null,
+      abwesenheiten: abwesenheitMap[m.id] || {},
+      tagesplan: tagesplanMap[m.id] || {},
+    })),
+  });
+});
+
+// ─── Dienstplan-Import ────────────────────────────────────────────────────────
+app.post('/api/dienstplan/import', authMiddleware, (req, res) => {
+  const { monat, eintraege, ersetzen } = req.body;
+  const db = getDb();
+
+  if (!monat || !Array.isArray(eintraege)) {
+    return res.status(400).json({ fehler: 'monat und eintraege erforderlich' });
+  }
+
+  const errors = [];
+  let importiert = 0;
+
+  db.exec('BEGIN');
+  try {
+    if (ersetzen) {
+      db.prepare('DELETE FROM monatszuteilungen WHERE monat = ?').run(monat);
+    }
+    for (const e of eintraege) {
+      const ma = db.prepare('SELECT id, name FROM mitarbeiter WHERE personalnummer = ? AND aktiv = 1').get(String(e.pnr));
+      const rayon = db.prepare('SELECT id FROM rayone WHERE nummer = ? AND aktiv = 1').get(Number(e.rayon_nummer));
+      if (!ma) { errors.push(`PNR ${e.pnr} nicht gefunden`); continue; }
+      if (!rayon) { errors.push(`Rayon ${e.rayon_nummer} nicht gefunden`); continue; }
+      db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
+        .run(monat, ma.id, rayon.id);
+      importiert++;
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
+  }
+
+  res.json({ erfolg: true, importiert, fehler: errors });
+});
+
+// ─── Dienstplan-Grid-Import ────────────────────────────────────────────────────
+app.post('/api/dienstplan/grid-import', authMiddleware, (req, res) => {
+  const { monat, eintraege, ersetzen } = req.body;
+  const db = getDb();
+
+  if (!monat || !Array.isArray(eintraege)) {
+    return res.status(400).json({ fehler: 'monat und eintraege erforderlich' });
+  }
+
+  const ABSENCE_CODES = new Set(['K', 'U', 'KUR', 'VS', 'SA1', 'SA2', 'SA3', 'SA4', 'SA5', 'SA6', 'SA7', 'SA8', 'F']);
+  const CODE_STATUS = {
+    K: { status: 'krank', bemerkung: null },
+    U: { status: 'urlaub', bemerkung: null },
+    KUR: { status: 'sonstige', bemerkung: 'Kur' },
+    VS: { status: 'frei', bemerkung: 'VS' },
+    F: { status: 'frei', bemerkung: null },
+    SA1: { status: 'sonstige', bemerkung: 'SA1' },
+    SA2: { status: 'sonstige', bemerkung: 'SA2' },
+    SA3: { status: 'sonstige', bemerkung: 'SA3' },
+    SA4: { status: 'sonstige', bemerkung: 'SA4' },
+    SA5: { status: 'sonstige', bemerkung: 'SA5' },
+    SA6: { status: 'sonstige', bemerkung: 'SA6' },
+    SA7: { status: 'sonstige', bemerkung: 'SA7' },
+    SA8: { status: 'sonstige', bemerkung: 'SA8' },
+  };
+
+  const errors = [];
+  let importiertAbwesenheiten = 0;
+  let importiertZuteilungen = 0;
+
+  db.exec('BEGIN');
+  try {
+    if (ersetzen) {
+      db.prepare('DELETE FROM abwesenheiten WHERE datum LIKE ?').run(monat + '-%');
+      db.prepare('DELETE FROM monatszuteilungen WHERE monat = ?').run(monat);
+    }
+
+    const maCache = {};
+    const getMa = (pnr) => {
+      if (maCache[pnr] !== undefined) return maCache[pnr];
+      maCache[pnr] = db.prepare('SELECT id FROM mitarbeiter WHERE personalnummer = ? AND aktiv = 1').get(String(pnr)) || null;
+      return maCache[pnr];
+    };
+    const rayonCache = {};
+    const getRayon = (nummer) => {
+      if (rayonCache[nummer] !== undefined) return rayonCache[nummer];
+      rayonCache[nummer] = db.prepare('SELECT id FROM rayone WHERE nummer = ? AND aktiv = 1').get(Number(nummer)) || null;
+      return rayonCache[nummer];
+    };
+
+    // Only insert one monthly assignment per employee (first rayon number wins)
+    const maZuteilungSet = new Set();
+
+    for (const e of eintraege) {
+      const code = String(e.code || '').trim().toUpperCase();
+      if (!code) continue;
+
+      const ma = getMa(e.pnr);
+      if (!ma) { errors.push(`PNR ${e.pnr} nicht gefunden`); continue; }
+
+      if (ABSENCE_CODES.has(code)) {
+        const { status, bemerkung } = CODE_STATUS[code] || { status: 'sonstige', bemerkung: code };
+        db.prepare('INSERT OR REPLACE INTO abwesenheiten (mitarbeiter_id, datum, status, bemerkung) VALUES (?, ?, ?, ?)')
+          .run(ma.id, e.datum, status, bemerkung);
+        importiertAbwesenheiten++;
+      } else {
+        const rawNum = code.replace(/^0+/, '') || '0';
+        const num = parseInt(rawNum);
+        if (!isNaN(num) && num > 0) {
+          if (!maZuteilungSet.has(ma.id)) {
+            const rayon_nummer = Math.round(num / 10) * 10;
+            const rayon = getRayon(rayon_nummer);
+            if (!rayon) { errors.push(`Rayon ${rayon_nummer} nicht gefunden`); continue; }
+            db.prepare('INSERT OR REPLACE INTO monatszuteilungen (monat, mitarbeiter_id, rayon_id, ist_teilzuteilung) VALUES (?, ?, ?, 0)')
+              .run(monat, ma.id, rayon.id);
+            maZuteilungSet.add(ma.id);
+            importiertZuteilungen++;
+          }
+        } else {
+          errors.push(`Unbekannter Code "${e.code}" für PNR ${e.pnr}`);
+        }
+      }
+    }
+
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('[Fehler]', err);
+    return res.status(500).json({ fehler: 'Interner Serverfehler' });
+  }
+
+  res.json({ erfolg: true, importiertAbwesenheiten, importiertZuteilungen, fehler: errors });
 });
 
 // ─── Fairness-Statistik ───────────────────────────────────────────────────────
@@ -987,8 +1351,185 @@ app.get('/api/dashboard', authMiddleware, (req, res) => {
   });
 });
 
+// ─── Benutzerverwaltung (nur Admin) ──────────────────────────────────────────
+app.get('/api/benutzer', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const benutzer = db.prepare('SELECT id, benutzername, name, rolle, erstellt_am FROM benutzer ORDER BY name').all();
+  res.json(benutzer);
+});
+
+app.post('/api/benutzer', authMiddleware, adminOnly, (req, res) => {
+  const { benutzername, passwort, name, rolle } = req.body;
+  const db = getDb();
+  if (!benutzername || !passwort || !name) {
+    return res.status(400).json({ fehler: 'Benutzername, Passwort und Name erforderlich' });
+  }
+  if (passwort.length < 8) {
+    return res.status(400).json({ fehler: 'Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  const existiert = db.prepare('SELECT id FROM benutzer WHERE benutzername = ?').get(benutzername);
+  if (existiert) return res.status(409).json({ fehler: 'Benutzername bereits vergeben' });
+
+  const hash = bcrypt.hashSync(passwort, 10);
+  const result = db.prepare(
+    'INSERT INTO benutzer (benutzername, passwort_hash, name, rolle) VALUES (?, ?, ?, ?)'
+  ).run(benutzername, hash, name, rolle || 'schichtleiter');
+  res.json({ id: Number(result.lastInsertRowid), erfolg: true });
+});
+
+app.put('/api/benutzer/:id', authMiddleware, adminOnly, (req, res) => {
+  const { name, rolle, passwort } = req.body;
+  const db = getDb();
+  if (passwort) {
+    const hash = bcrypt.hashSync(passwort, 10);
+    db.prepare('UPDATE benutzer SET name = ?, rolle = ?, passwort_hash = ? WHERE id = ?')
+      .run(name, rolle, hash, req.params.id);
+  } else {
+    db.prepare('UPDATE benutzer SET name = ?, rolle = ? WHERE id = ?')
+      .run(name, rolle, req.params.id);
+  }
+  res.json({ erfolg: true });
+});
+
+app.delete('/api/benutzer/:id', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  // Letzten Admin nicht löschen
+  const adminCount = db.prepare("SELECT COUNT(*) as c FROM benutzer WHERE rolle = 'admin'").get();
+  const zuLoeschender = db.prepare('SELECT rolle FROM benutzer WHERE id = ?').get(req.params.id);
+  if (zuLoeschender?.rolle === 'admin' && adminCount.c <= 1) {
+    return res.status(400).json({ fehler: 'Der letzte Administrator kann nicht gelöscht werden' });
+  }
+  db.prepare('DELETE FROM benutzer WHERE id = ?').run(req.params.id);
+  res.json({ erfolg: true });
+});
+
+// ─── Eigenes Passwort ändern (alle Benutzer) ─────────────────────────────────
+app.put('/api/me/passwort', authMiddleware, (req, res) => {
+  const { aktuelles_passwort, neues_passwort } = req.body;
+  if (!aktuelles_passwort || !neues_passwort) {
+    return res.status(400).json({ fehler: 'Aktuelles und neues Passwort sind erforderlich' });
+  }
+  if (neues_passwort.length < 8) {
+    return res.status(400).json({ fehler: 'Neues Passwort muss mindestens 8 Zeichen lang sein' });
+  }
+  const db = getDb();
+  const benutzer = db.prepare('SELECT * FROM benutzer WHERE id = ?').get(req.benutzer.id);
+  if (!benutzer || !bcrypt.compareSync(aktuelles_passwort, benutzer.passwort_hash)) {
+    return res.status(401).json({ fehler: 'Aktuelles Passwort ist falsch' });
+  }
+  const hash = bcrypt.hashSync(neues_passwort, 10);
+  db.prepare('UPDATE benutzer SET passwort_hash = ? WHERE id = ?').run(hash, req.benutzer.id);
+  res.json({ erfolg: true });
+});
+
+// ─── Audit-Log anzeigen (nur Admin) ──────────────────────────────────────────
+app.get('/api/audit-log', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const { limit = 100, offset = 0 } = req.query;
+  const eintraege = db.prepare(`
+    SELECT * FROM audit_log ORDER BY zeitstempel DESC LIMIT ? OFFSET ?
+  `).all(Number(limit), Number(offset));
+  const gesamt = db.prepare('SELECT COUNT(*) as count FROM audit_log').get();
+  res.json({ eintraege, gesamt: gesamt.count });
+});
+
+// ─── iCal-Export ─────────────────────────────────────────────────────────────
+app.get('/api/tagesplan/:monat/ical', authMiddleware, (req, res) => {
+  const { monat } = req.params;
+  const db = getDb();
+
+  // Alle Tagesplaneinträge für den Monat laden
+  const eintraege = db.prepare(`
+    SELECT t.datum, r.nummer as rayon_nummer, r.bezeichnung as rayon_bezeichnung,
+           m.name as mitarbeiter_name, t.ist_vertretung
+    FROM tagespläne t
+    JOIN rayone r ON t.rayon_id = r.id
+    LEFT JOIN mitarbeiter m ON t.mitarbeiter_id = m.id
+    WHERE t.datum LIKE ? AND t.mitarbeiter_id IS NOT NULL
+    ORDER BY t.datum, r.nummer
+  `).all(`${monat}%`);
+
+  // ICS generieren
+  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  let ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Rayon-Verwaltung//Post//DE',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:Tagesplan ${monat}`,
+    'X-WR-TIMEZONE:Europe/Vienna',
+  ];
+
+  for (const e of eintraege) {
+    const datumKompakt = e.datum.replace(/-/g, '');
+    const uid = `${datumKompakt}-rayon${e.rayon_nummer}@rayon-app`;
+    const zusammenfassung = `R${e.rayon_nummer}: ${e.mitarbeiter_name}${e.ist_vertretung ? ' (Vertretung)' : ''}`;
+
+    ics.push(
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${datumKompakt}`,
+      `DTEND;VALUE=DATE:${datumKompakt}`,
+      `SUMMARY:${zusammenfassung}`,
+      `DESCRIPTION:Rayon ${e.rayon_nummer} – ${e.rayon_bezeichnung}`,
+      'END:VEVENT'
+    );
+  }
+
+  ics.push('END:VCALENDAR');
+
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="tagesplan-${monat}.ics"`);
+  res.send(ics.join('\r\n'));
+});
+
+// ─── Backup-Status ────────────────────────────────────────────────────────────
+app.get('/api/backup/status', authMiddleware, adminOnly, (req, res) => {
+  const backupDir = path.join(__dirname, 'backups');
+  if (!fs.existsSync(backupDir)) return res.json({ backups: [] });
+  const backups = fs.readdirSync(backupDir)
+    .filter(f => f.startsWith('rayon.db.backup.'))
+    .sort()
+    .reverse()
+    .map(f => {
+      const stats = fs.statSync(path.join(backupDir, f));
+      return { datei: f, groesse_kb: Math.round(stats.size / 1024), erstellt: stats.mtime };
+    });
+  res.json({ backups });
+});
+
+// ─── DSGVO / DSG (Österreich) ─────────────────────────────────────────────────
+// Art. 15 DSGVO: Recht auf Auskunft / Datenportabilität
+// Exportiert alle personenbezogenen Daten eines Mitarbeiters als JSON
+app.get('/api/dsgvo/export/:mitarbeiterId', authMiddleware, adminOnly, (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.mitarbeiterId);
+  if (!id || isNaN(id)) return res.status(400).json({ fehler: 'Ungültige Mitarbeiter-ID' });
+
+  const mitarbeiter = db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(id);
+  if (!mitarbeiter) return res.status(404).json({ fehler: 'Mitarbeiter nicht gefunden' });
+
+  const monatszuteilungen = db.prepare('SELECT * FROM monatszuteilungen WHERE mitarbeiter_id = ?').all(id);
+  const abwesenheiten = db.prepare('SELECT * FROM abwesenheiten WHERE mitarbeiter_id = ?').all(id);
+  const kompetenzen = db.prepare('SELECT k.*, r.nummer, r.bezeichnung FROM kompetenzen k JOIN rayone r ON k.rayon_id = r.id WHERE k.mitarbeiter_id = ?').all(id);
+  const vertretungen = db.prepare('SELECT * FROM vertretungseinsätze WHERE mitarbeiter_id = ?').all(id);
+
+  res.setHeader('Content-Disposition', `attachment; filename="dsgvo-export-mitarbeiter-${id}.json"`);
+  res.json({
+    exportDatum: new Date().toISOString(),
+    hinweis: 'Datenexport gemäß Art. 15 DSGVO / § 1 DSG (Österreich)',
+    mitarbeiter,
+    monatszuteilungen,
+    abwesenheiten,
+    kompetenzen,
+    vertretungseinsaetze: vertretungen,
+  });
+});
+
 // ─── Frontend-Serving (für Electron / Standalone) ────────────────────────────
-const frontendDist = process.env.FRONTEND_DIST;
+const frontendDist = process.env.FRONTEND_DIST ? require("path").resolve(process.env.FRONTEND_DIST) : null;
 if (frontendDist && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get(/^(?!\/api).*/, (req, res) => {
@@ -999,7 +1540,6 @@ if (frontendDist && fs.existsSync(frontendDist)) {
 // ─── Server starten ───────────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
   console.log(`Rayon-App Backend läuft auf Port ${PORT}`);
-  console.log(`Login: admin / admin123`);
   getDb();
 });
 

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PlusIcon, MagnifyingGlassIcon, UserCircleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, UserCircleIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import api from '../utils/api.js';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
+
+const PAGE_SIZE = 24;
 
 const MITNAHME_MODUS_LABEL = {
   normal: null, // kein Badge
@@ -17,6 +19,7 @@ export default function Mitarbeiter() {
   const [mitarbeiter, setMitarbeiter] = useState([]);
   const [rayone, setRayone] = useState([]);
   const [suche, setSuche] = useState('');
+  const [seite, setSeite] = useState(1);
   const [zeigFormular, setZeigFormular] = useState(false);
   const [laden, setLaden] = useState(true);
   const [formDaten, setFormDaten] = useState({
@@ -70,6 +73,9 @@ export default function Mitarbeiter() {
     m.name.toLowerCase().includes(suche.toLowerCase()) ||
     m.personalnummer.includes(suche)
   );
+  const seitenAnzahl = Math.ceil(gefilterte.length / PAGE_SIZE);
+  const aktuelleSeite = Math.min(seite, seitenAnzahl || 1);
+  const sichtbar = gefilterte.slice((aktuelleSeite - 1) * PAGE_SIZE, aktuelleSeite * PAGE_SIZE);
 
   const handleSpeichern = async (e) => {
     e.preventDefault();
@@ -125,13 +131,14 @@ export default function Mitarbeiter() {
           className="input pl-9"
           placeholder="Name oder Personalnummer suchen..."
           value={suche}
-          onChange={(e) => setSuche(e.target.value)}
+          onChange={(e) => { setSuche(e.target.value); setSeite(1); }}
+          autoComplete="new-password"
         />
       </div>
 
       {/* Mitarbeiter-Liste */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {gefilterte.map((m) => {
+        {sichtbar.map((m) => {
           const modusInfo = MITNAHME_MODUS_LABEL[m.mitnahme_modus];
           return (
             <Link
@@ -155,14 +162,9 @@ export default function Mitarbeiter() {
                   )}
 
                   {/* Heute besetzter Rayon (aus Tagesplan) */}
-                  {m.heute_rayon_id && m.heute_rayon_id !== m.stamm_rayon_id && (
+                  {m.heute_rayon_id && (
                     <div className="text-xs font-medium text-blue-600 mt-0.5">
                       Heute: {m.heute_rayon_bezeichnung}
-                    </div>
-                  )}
-                  {m.heute_rayon_id && m.heute_rayon_id === m.stamm_rayon_id && (
-                    <div className="text-xs font-medium text-green-600 mt-0.5">
-                      Heute auf Stammrayon
                     </div>
                   )}
 
@@ -203,6 +205,34 @@ export default function Mitarbeiter() {
           </div>
         )}
       </div>
+
+      {seitenAnzahl > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            onClick={() => setSeite(s => Math.max(1, s - 1))}
+            disabled={aktuelleSeite === 1}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          >
+            <ChevronLeftIcon className="w-4 h-4" />
+          </button>
+          {Array.from({ length: seitenAnzahl }, (_, i) => i + 1).map(n => (
+            <button
+              key={n}
+              onClick={() => setSeite(n)}
+              className={`w-8 h-8 rounded-lg text-sm font-medium ${aktuelleSeite === n ? 'bg-yellow-400 text-gray-900' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              {n}
+            </button>
+          ))}
+          <button
+            onClick={() => setSeite(s => Math.min(seitenAnzahl, s + 1))}
+            disabled={aktuelleSeite === seitenAnzahl}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+          >
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Quick-Aktion Dropdown */}
       {quickAktion && (
@@ -264,26 +294,34 @@ export default function Mitarbeiter() {
       {/* Formular-Modal */}
       {zeigFormular && (
         <Modal title="Neuen Mitarbeiter anlegen" onClose={() => setZeigFormular(false)}>
-          <form onSubmit={handleSpeichern} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="label">Name *</label>
                 <input className="input" required value={formDaten.name}
+                  autoComplete="off" name="x-name" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
               </div>
               <div>
                 <label className="label">Personalnummer *</label>
                 <input className="input" required value={formDaten.personalnummer}
+                  autoComplete="off" name="x-pnr" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
               </div>
               <div>
                 <label className="label">Telefon</label>
-                <input className="input" value={formDaten.telefon}
+                <input className="input" value={formDaten.telefon} type="text" inputMode="numeric"
+                  autoComplete="off" name="x-tel" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
               </div>
               <div className="col-span-2">
                 <label className="label">E-Mail</label>
-                <input type="email" className="input" value={formDaten.email}
+                <input type="text" className="input" value={formDaten.email}
+                  autoComplete="off" name="x-mail" data-form-type="other" data-lpignore="true"
+                  readOnly onFocus={e => { e.target.readOnly = false; }}
                   onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
               </div>
               <div className="col-span-2">
@@ -321,8 +359,8 @@ export default function Mitarbeiter() {
 
 export function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h3 className="font-semibold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>

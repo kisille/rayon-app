@@ -22,7 +22,8 @@
     @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
   }
   .input {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all duration-150;
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all duration-150;
+    color-scheme: light;
   }
   .label {
     @apply block text-sm font-medium text-gray-700 mb-1;
@@ -42,9 +43,76 @@
   .badge-frei {
     @apply bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded-full;
   }
+  .badge-kur {
+    @apply bg-teal-100 text-teal-800 text-xs font-semibold px-2.5 py-0.5 rounded-full;
+  }
+}
+
+/* Touch-friendly tap targets – minimum 44px for interactive elements on mobile */
+@media (max-width: 768px) {
+  .btn-primary, .btn-secondary, .btn-danger {
+    @apply min-h-[44px];
+  }
+  button, a[role="button"] {
+    min-height: 36px;
+  }
+}
+
+/* Force light color scheme for text inputs – prevents dark OS autocomplete/dropdown UI */
+input[type="text"], input[type="search"], input[type="number"], input[type="email"], input[type="tel"], select, textarea {
+  color-scheme: light;
+}
+
+/* Disable browser contact picker icons and autofill highlights globally */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-inner-spin-button,
+input::-webkit-list-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  height: 0;
+  width: 0;
+  margin: 0;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px white inset !important;
+  box-shadow: 0 0 0 30px white inset !important;
+  -webkit-text-fill-color: inherit !important;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
+
+  /* Sidebar und Navigation verstecken */
+  nav, aside, header { display: none !important; }
+
+  /* Seitenlayout für Druck */
+  body { background: white !important; font-size: 11pt; }
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; border-radius: 4px !important; }
+
+  /* Tabellen für Druck */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 4px 8px; font-size: 10pt; }
+  th { background: #f5f5f5 !important; font-weight: bold; }
+
+  /* Seitenumbruch vermeiden */
+  tr { page-break-inside: avoid; }
+
+  /* Farben für Badges im Druck */
+  .badge-stamm { background: #d1fae5 !important; color: #065f46 !important; }
+  .badge-vertretung { background: #fef3c7 !important; color: #92400e !important; }
+  .badge-krank { background: #fee2e2 !important; color: #991b1b !important; }
+  .badge-urlaub { background: #dbeafe !important; color: #1e40af !important; }
+  .badge-frei { background: #ede9fe !important; color: #5b21b6 !important; }
+  .badge-kur { background: #ccfbf1 !important; color: #115e59 !important; }
 }

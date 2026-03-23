@@ -59,6 +59,7 @@ export default function RayonDetail() {
                   placeholder="Rayonname / -nummer"
                   value={formDaten.bezeichnung}
                   onChange={(e) => setFormDaten({ ...formDaten, bezeichnung: e.target.value })}
+                  autoComplete="new-password"
                 />
                 <button onClick={handleSpeichern} className="text-green-600 hover:text-green-700">
                   <CheckIcon className="w-5 h-5" />
@@ -72,6 +73,7 @@ export default function RayonDetail() {
                 placeholder="Ort/e (Gebiet)"
                 value={formDaten.gebiet}
                 onChange={(e) => setFormDaten({ ...formDaten, gebiet: e.target.value })}
+                autoComplete="new-password"
               />
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-500">Priorität:</label>
@@ -106,6 +108,11 @@ export default function RayonDetail() {
                   </button>
                 </div>
                 {rayon.gebiet && <p className="text-gray-500 mt-0.5">{rayon.gebiet}</p>}
+                {stammBesetzung.length > 0 && (
+                  <p className="text-xs text-green-700 mt-0.5">
+                    Stammzusteller: {stammBesetzung.map(s => s.mitarbeiter_name).join(', ')}
+                  </p>
+                )}
                 <p className="text-xs mt-0.5">
                   {(() => {
                     const p = rayon.priorität || 'normal';
@@ -133,22 +140,6 @@ export default function RayonDetail() {
               Zuweisen
             </button>
           </div>
-          {/* Stammzusteller */}
-          {stammBesetzung.length > 0 && (
-            <div className="mb-3 pb-2 border-b border-green-100">
-              <div className="text-xs text-green-600 font-medium mb-1">Stammzusteller</div>
-              {stammBesetzung.map(s => (
-                <Link key={s.mitarbeiter_id} to={`/mitarbeiter/${s.mitarbeiter_id}`}
-                  className="flex items-center gap-2 text-sm hover:underline">
-                  <div className="w-6 h-6 bg-green-200 rounded-full flex items-center justify-center text-xs font-semibold text-green-800 flex-shrink-0">
-                    {s.mitarbeiter_name?.charAt(0)}
-                  </div>
-                  <span className="text-gray-700">{s.mitarbeiter_name}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-
           {aktuellebesetzung.length === 0 ? (
             <p className="text-gray-400 text-sm italic">Nicht besetzt</p>
           ) : (
@@ -172,6 +163,19 @@ export default function RayonDetail() {
                   <button
                     onClick={async () => {
                       await api.delete(`/monatszuteilungen/${monat}/${b.mitarbeiter_id}/${parseInt(id)}`);
+                      // Auch heutigen Tagesplan-Eintrag für diesen Rayon leeren,
+                      // damit der Mitarbeiter nicht weiter als "heute" angezeigt wird
+                      const heute = new Date().toISOString().split('T')[0];
+                      await api.post(`/tagesplan/${heute}/speichern`, {
+                        eintraege: [{
+                          rayon_id: parseInt(id),
+                          mitarbeiter_id: null,
+                          ist_vertretung: false,
+                          ist_teilbesetzung: false,
+                          vertritt_mitarbeiter_id: null,
+                          teilmitnahmen: [],
+                        }],
+                      });
                       await laden_();
                     }}
                     className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -281,8 +285,8 @@ function ZuweisungsModal({ rayonId, monat, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-bold text-gray-900">Mitarbeiter zuweisen</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -299,6 +303,14 @@ function ZuweisungsModal({ rayonId, monat, onClose, onSaved }) {
               value={suche}
               onChange={e => setSuche(e.target.value)}
               autoFocus
+              autoComplete="new-password"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
+              readOnly
+              onFocus={e => { e.target.readOnly = false; }}
             />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
@@ -391,8 +403,8 @@ function KompetenzHinzufuegenModal({ rayonId, level, vorhandene, onClose, onSave
   const levelLabel = level === 1 ? 'Level 1 – Stamm' : level === 2 ? 'Level 2 – Sehr gut' : 'Level 3 – Geht so';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-bold text-gray-900">Mitarbeiter hinzufügen – {levelLabel}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><XMarkIcon className="w-5 h-5" /></button>
@@ -401,7 +413,10 @@ function KompetenzHinzufuegenModal({ rayonId, level, vorhandene, onClose, onSave
           <div className="relative">
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input type="text" className="input pl-9 text-sm" placeholder="Name oder Personalnummer suchen..."
-              value={suche} onChange={e => setSuche(e.target.value)} autoFocus />
+              value={suche} onChange={e => setSuche(e.target.value)} autoFocus
+              autoComplete="new-password" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+              data-lpignore="true" data-form-type="other"
+              readOnly onFocus={e => { e.target.readOnly = false; }} />
           </div>
           <div className="border border-gray-200 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
             {gefiltert.map(m => (

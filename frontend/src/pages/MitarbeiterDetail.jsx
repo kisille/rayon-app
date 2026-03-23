@@ -4,11 +4,13 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import api from '../utils/api.js';
 import { kompetenzLabel, kompetenzBadgeClass } from '../utils/helpers.js';
 import { Modal } from './Mitarbeiter.jsx';
+import { useConfirm } from '../components/ConfirmDialog.jsx';
 import { SearchableSelect } from '../components/SearchableSelect.jsx';
 
 export default function MitarbeiterDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [mitarbeiter, setMitarbeiter] = useState(null);
   const [rayone, setRayone] = useState([]);
   const [laden, setLaden] = useState(true);
@@ -48,7 +50,7 @@ export default function MitarbeiterDetail() {
   };
 
   const handleLöschen = async () => {
-    if (!window.confirm(`${mitarbeiter.name} wirklich löschen?`)) return;
+    if (!await confirm(`${mitarbeiter.name} wirklich löschen?`)) return;
     await api.delete(`/mitarbeiter/${id}`);
     navigate('/mitarbeiter');
   };
@@ -113,29 +115,12 @@ export default function MitarbeiterDetail() {
             <Detail label="Personalnr." wert={mitarbeiter.personalnummer} />
             <Detail label="Telefon" wert={mitarbeiter.telefon || '–'} />
             <Detail label="E-Mail" wert={mitarbeiter.email || '–'} />
-            <Detail
-              label="Stamm-Rayon"
-              wert={mitarbeiter.stamm_rayon_bezeichnung || '–'}
-            />
-            {mitarbeiter.heute_rayon_bezeichnung && (
+            {mitarbeiter.stamm_rayon_bezeichnung && (
               <Detail
-                label="Heute besetzt"
-                wert={
-                  <span className={mitarbeiter.heute_rayon_id === mitarbeiter.stamm_rayon_id ? 'text-green-600 font-medium' : 'text-blue-600 font-medium'}>
-                    {mitarbeiter.heute_rayon_bezeichnung}
-                    {mitarbeiter.heute_rayon_id === mitarbeiter.stamm_rayon_id ? ' (Stammrayon)' : ''}
-                  </span>
-                }
+                label="Stamm-Rayon"
+                wert={mitarbeiter.stamm_rayon_bezeichnung}
               />
             )}
-            <Detail
-              label="Ganzmitnahme"
-              wert={ganzmitnahme
-                ? `${ganzmitnahme.rayon_bezeichnung}${ganzmitnahme.rayon_id === mitarbeiter.stamm_rayon_id ? ' (= Stamm)' : ''}`
-                : (mitarbeiter.stamm_rayon_bezeichnung
-                    ? `${mitarbeiter.stamm_rayon_bezeichnung} (Stamm)`
-                    : '–')}
-            />
             {teilmitnahmen.length > 0 && (
               <Detail
                 label={`Teilmitnahmen (${teilmitnahmen.length}/2)`}
@@ -206,25 +191,33 @@ export default function MitarbeiterDetail() {
       {/* Bearbeiten-Modal */}
       {bearbeiteModus && (
         <Modal title="Mitarbeiter bearbeiten" onClose={() => setBearbeiteModus(false)}>
-          <form onSubmit={handleSpeichern} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleSpeichern} className="space-y-4">
             <div>
               <label className="label">Name *</label>
               <input className="input" required value={formDaten.name}
+                autoComplete="off" name="x-name" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, name: e.target.value })} />
             </div>
             <div>
               <label className="label">Personalnummer *</label>
               <input className="input" required value={formDaten.personalnummer}
+                autoComplete="off" name="x-pnr" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, personalnummer: e.target.value })} />
             </div>
             <div>
               <label className="label">Telefon</label>
-              <input className="input" value={formDaten.telefon}
+              <input className="input" value={formDaten.telefon} type="text" inputMode="numeric"
+                autoComplete="off" name="x-tel" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, telefon: e.target.value })} />
             </div>
             <div>
               <label className="label">E-Mail</label>
-              <input type="email" className="input" value={formDaten.email}
+              <input type="text" className="input" value={formDaten.email}
+                autoComplete="off" name="x-mail" data-form-type="other" data-lpignore="true"
+                readOnly onFocus={e => { e.target.readOnly = false; }}
                 onChange={(e) => setFormDaten({ ...formDaten, email: e.target.value })} />
             </div>
             <div>
@@ -259,7 +252,7 @@ export default function MitarbeiterDetail() {
       {/* Kompetenz hinzufügen */}
       {zeigKompetenzForm && (
         <Modal title="Rayon-Kompetenz hinzufügen" onClose={() => setZeigKompetenzForm(false)}>
-          <form onSubmit={handleKompetenzHinzufügen} className="space-y-4">
+          <form autoComplete="off" onSubmit={handleKompetenzHinzufügen} className="space-y-4">
             <div>
               <label className="label">Rayon *</label>
               <select className="input" required value={neueKompetenz.rayon_id}

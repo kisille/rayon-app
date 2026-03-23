@@ -7,7 +7,13 @@
     <title>Rayon-Vertretungs-App | Post</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root" autocomplete="off"></div>
+    <script>
+      // Browser-Autocomplete global deaktivieren
+      document.addEventListener('DOMContentLoaded', () => {
+        document.body.setAttribute('autocomplete', 'off');
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

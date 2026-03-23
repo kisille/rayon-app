@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../App.jsx';
 import api from '../utils/api.js';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ benutzername: '', passwort: '' });
   const [fehler, setFehler] = useState('');
   const [laden, setLaden] = useState(false);
+
+  const sitzungAbgelaufen = searchParams.get('grund') === 'sitzung-abgelaufen';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -16,13 +19,15 @@ export default function Login() {
     setLaden(true);
     try {
       const { data } = await api.post('/auth/login', form);
-      login(data.token, { name: data.name, benutzername: form.benutzername });
+      login(data.token, { name: data.name, benutzername: form.benutzername, rolle: data.rolle || 'admin' });
       navigate('/');
     } catch (err) {
       if (!err.response) {
-        setFehler('Keine Verbindung zum Server. Bitte stellen Sie sicher, dass das Backend läuft (node server.js).');
+        setFehler('Keine Verbindung zum Server.');
       } else if (err.response.status === 401) {
-        setFehler('Ungültige Anmeldedaten. Benutzername: admin, Passwort: admin123');
+        setFehler('Ungültige Anmeldedaten. Bitte Benutzername und Passwort prüfen.');
+      } else if (err.response.status === 429) {
+        setFehler('Zu viele Anmeldeversuche. Bitte 15 Minuten warten.');
       } else {
         setFehler(`Fehler: ${err.response.status} – ${err.response.data?.fehler || 'Unbekannter Fehler'}`);
       }
@@ -34,6 +39,13 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-yellow-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+        {/* Session abgelaufen Hinweis */}
+        {sitzungAbgelaufen && (
+          <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg text-sm mb-6 text-center">
+            Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.
+          </div>
+        )}
+
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-yellow-400 rounded-2xl shadow-lg mb-4">
@@ -56,6 +68,7 @@ export default function Login() {
                 placeholder="admin"
                 required
                 autoFocus
+                autoComplete="off"
               />
             </div>
             <div>
@@ -67,6 +80,7 @@ export default function Login() {
                 onChange={(e) => setForm({ ...form, passwort: e.target.value })}
                 placeholder="••••••••"
                 required
+                autoComplete="current-password"
               />
             </div>
 
@@ -86,7 +100,7 @@ export default function Login() {
           </form>
 
           <div className="mt-4 pt-4 border-t border-gray-100 text-center text-xs text-gray-400">
-            Standard-Login: admin / admin123
+            Bei Problemen wenden Sie sich an Ihren Administrator.
           </div>
         </div>
       </div>

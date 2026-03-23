@@ -1,1 +1,11 @@
-node_modules/\ndist/\n*.db
+node_modules/
+dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+backend/backups/
+# TLS-Zertifikate niemals ins Repo committen
+certs/*.pem
+certs/*.key
+certs/*.crt

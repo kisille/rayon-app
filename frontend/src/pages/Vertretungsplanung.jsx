@@ -92,6 +92,7 @@ export default function Vertretungsplanung() {
           className="input w-auto"
           value={datum}
           onChange={(e) => setDatum(e.target.value)}
+          autoComplete="off"
         />
       </div>
 
